@@ -1,0 +1,32 @@
+パーツは「OBJ + JSON（パーツ定義）」だけ持ち、テクスチャは親の車が使っているPNGをそのまま流用します。親子関係をJSONで定義する形が最もシンプルです。
+アプローチ
+パーツJSONの構造（例）
+json{
+  "basic": {
+    "type": "part",
+    "name": "フロントバンパー"
+  }
+}
+typeが"part"のものはエンティティ登録せず、OBJだけassetRegistryMapに登録します。
+親の車JSON側でパーツを指定する
+json{
+  "basic": {
+    "type": "cars",
+    "name": "Test Car"
+  },
+  "parts": [
+    "front_bumper",
+    "rear_wing"
+  ]
+}
+parts配列に、パーツのbaseName（JSONファイル名から拡張子を除いたもの）を列挙します。
+描画時の流れ
+
+車エンティティが描画される時、自分のOBJのパーツ（oオブジェクト）を描画する
+parts配列に列挙されたパーツのOBJも同じposeStack・同じPNGテクスチャで追加描画する
+パーツのOBJは車と同じ座標系で描画されるため、位置合わせはOBJ側で行う
+
+AssetRegistryの変更点
+現状はbaseNameに対してOBJ・PNGを1対1で持っていますが、パーツはPNGがnullでも問題ないよう、描画時に「PNGがnullなら親のPNGを使う」という分岐をCarEntityRenderer側に追加するだけです。
+分割との関係
+loadCarJson内でtypeが"part"の場合はエンティティ登録をスキップし、OBJだけassetRegistryMapに入れる処理を追加するだけなので、既存のローダーへの変更は最小限です。
