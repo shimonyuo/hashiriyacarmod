@@ -39,7 +39,12 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
         }
         if (parts.isEmpty()) return;
 
+        // 親から送り付けられたテクスチャを優先して使用
         ResourceLocation texLoc = entity.getCachedTextureLocation();
+        if (texLoc == null) {
+            // 親送り付け用メソッドを呼び出し（安全策）
+            texLoc = getTextureFromParent(entity);
+        }
         if (texLoc == null) return;
 
         float carPitch = entity.getCarPitch();
@@ -62,6 +67,13 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
 
         poseStack.popPose();
     }
+
+    // 親Carからテクスチャを送り付ける安全策メソッド
+    private ResourceLocation getTextureFromParent(CarEntity entity) {
+        // 将来ここでparts個別のテクスチャ拒否判定を追加可能
+        return entity.getCachedTextureLocationFromParent();  // CarEntity側メソッド呼び出し
+    }
+
     private void drawMeshOnGpu(CarEntity entity, String partName, ObjMesh mesh,
                                Matrix4f partMatrix, ResourceLocation texLoc, int packedLight) {
 

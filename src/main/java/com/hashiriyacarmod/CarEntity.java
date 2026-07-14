@@ -193,17 +193,46 @@ public class CarEntity extends Entity {
         if (baseName == null || baseName.isEmpty()) return false;
 
         AssetRegistry registry = CarPackLoader.getAssetRegistry(baseName);
-        if (registry == null || registry.parts.isEmpty()) {
+
+        // carsの場合（従来通り）
+        if (registry != null && !registry.parts.isEmpty()) {
+            clientData.parts = registry.parts;
+            if (registry.pngFile != null) {
+                clientData.textureLocation = CarTextureManager.getOrLoad(baseName, registry.pngFile);
+            }
+            clientData.resolved = true;
+            return true;
+        }
+
+        // partsの場合：親のテクスチャを確保（送り付け）
+        clientData.parts = getPartMeshes();  // PartRegistryから取得
+        if (clientData.parts.isEmpty()) {
             clientData.resolved = true;
             return false;
         }
 
-        clientData.parts = registry.parts;
-        if (registry.pngFile != null) {
-            clientData.textureLocation = CarTextureManager.getOrLoad(baseName, registry.pngFile);
-        }
+        // 親のテクスチャを送り付ける（最重要変更点）
+        clientData.textureLocation = getCachedTextureLocationFromParent();
+
         clientData.resolved = true;
         return true;
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    public ResourceLocation getCachedTextureLocationFromParent() {
+        // まず通常のキャッシュを確認
+        if (clientData != null && clientData.textureLocation != null) {
+            return clientData.textureLocation;
+        }
+
+        // AssetRegistryから取得を試みる（carsのフォールバック）
+        AssetRegistry registry = CarPackLoader.getAssetRegistry(getBaseName());
+        if (registry != null && registry.pngFile != null) {
+            return CarTextureManager.getOrLoad(getBaseName(), registry.pngFile);
+        }
+
+        // 将来：parts個別テクスチャ拒否ロジックをここに追加可能
+        return null;
     }
 
     @OnlyIn(Dist.CLIENT)
