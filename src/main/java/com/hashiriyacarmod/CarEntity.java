@@ -1,5 +1,6 @@
 package com.hashiriyacarmod;
 
+import com.hashiriyacarmod.parts.PartRegistry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -68,6 +69,11 @@ public class CarEntity extends Entity {
 
     public void setCarRoll(float roll) {
         this.entityData.set(CAR_ROLL, roll);
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    public Map<String, ObjMesh> getPartMeshes() {
+        return PartRegistry.getPartMeshes(getBaseName());
     }
 
     // ==================== 検知ボックス（hitbox）関連 ====================

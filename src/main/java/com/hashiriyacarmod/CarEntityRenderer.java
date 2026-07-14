@@ -1,5 +1,6 @@
 package com.hashiriyacarmod;
 
+import com.hashiriyacarmod.parts.PartRegistry;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -33,6 +34,9 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
         if (!entity.resolveRenderCache()) return;
 
         var parts = entity.getCachedParts();
+        if (parts.isEmpty()) {
+            parts = entity.getPartMeshes();
+        }
         if (parts.isEmpty()) return;
 
         ResourceLocation texLoc = entity.getCachedTextureLocation();
@@ -58,7 +62,6 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
 
         poseStack.popPose();
     }
-
     private void drawMeshOnGpu(CarEntity entity, String partName, ObjMesh mesh,
                                Matrix4f partMatrix, ResourceLocation texLoc, int packedLight) {
 
