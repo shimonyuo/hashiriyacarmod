@@ -2,6 +2,7 @@ package com.hashiriyacarmod;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.hashiriyacarmod.parts.PartRegistry;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -246,7 +247,7 @@ public class CarPackLoader {
 
         if (!"cars".equalsIgnoreCase(type)) {
             if ("parts".equalsIgnoreCase(type)) {
-                com.hashiriyacarmod.parts.CarPartLoader.register(baseName, objFile);
+                PartRegistry.register(baseName, objFile);
             } else {
                 LOGGER.debug("[HashiriyaCarMod] type='{}' のためスキップ: {}", type, rawId);
             }

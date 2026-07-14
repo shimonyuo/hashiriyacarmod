@@ -15,7 +15,7 @@ import java.util.Map;
  * エンティティ登録は行いません。
  * CarPackLoaderがJSONを発見した際に、このクラスのregister()を呼び出します。
  */
-public class CarPartLoader {
+public class PartRegistry {
 
     private static final Logger LOGGER = LogManager.getLogger(HashiriyaCarMod.MOD_ID);
 
@@ -28,18 +28,18 @@ public class CarPartLoader {
      */
     public static void register(String baseName, File objFile) {
         if (objFile == null || !objFile.exists()) {
-            LOGGER.warn("[CarPartLoader] OBJが見つかりません: {}", baseName);
+            LOGGER.warn("[PartRegistry] OBJが見つかりません: {}", baseName);
             return;
         }
 
         Map<String, ObjMesh> meshParts = ObjLoader.loadWithParts(objFile);
         if (meshParts.isEmpty()) {
-            LOGGER.warn("[CarPartLoader] OBJのパーツが空です: {}", baseName);
+            LOGGER.warn("[PartRegistry] OBJのパーツが空です: {}", baseName);
             return;
         }
 
         partMeshMap.put(baseName, meshParts);
-        LOGGER.info("[CarPartLoader] パーツ登録完了: {} ({} パーツ, OBJ: {})",
+        LOGGER.info("[PartRegistry] パーツ登録完了: {} ({} パーツ, OBJ: {})",
                 baseName, meshParts.size(), objFile.getName());
     }
 
