@@ -177,10 +177,14 @@ public class CarPackLoader {
             hitboxMap.put(baseName, result.hitboxes);
         }
 
+        if (!result.allowedPartGroups.isEmpty()) {
+            LOGGER.debug("[HashiriyaCarMod] {} の allowedPartGroups: {}", baseName, result.allowedPartGroups);
+        }
+
         // ==================== type ごとの処理 ====================
         if ("cars".equalsIgnoreCase(type)) {
             Map<String, ObjMesh> meshParts = ObjLoader.loadWithParts(objFile);
-            AssetRegistry entry = new AssetRegistry(baseName, objFile, pngFile, meshParts);
+            AssetRegistry entry = new AssetRegistry(baseName, objFile, pngFile, meshParts, result.allowedPartGroups);
             assetRegistryMap.put(baseName, entry);
         }
         else if ("parts".equalsIgnoreCase(type)) {

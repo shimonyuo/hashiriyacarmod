@@ -42,6 +42,17 @@ public class CarEntity extends Entity {
         this.entityData.define(BASE_NAME, "");
         this.entityData.define(CAR_PITCH, 0.0f);
         this.entityData.define(CAR_ROLL, 0.0f);
+
+        // ★ 新規追加：パーツグループ（クライアントでもすぐ取れるように）
+        // 将来的にSynchedEntityDataで同期したい場合はここに追加
+    }
+
+    // ★ 新規メソッド追加（任意の場所、例えば getHitboxDefinitions の近く）
+    public List<String> getAllowedPartGroups() {
+        // 現在はAssetRegistryやCarPackLoaderから取得する想定
+        AssetRegistry registry = CarPackLoader.getAssetRegistry(getBaseName());
+        // 簡易的にresultから持ってくる実装に後で拡張
+        return registry != null ? registry.allowedPartGroups : List.of();   // 後でAssetRegistryにも追加
     }
 
     public String getBaseName() {
