@@ -160,17 +160,47 @@ public class CarPackLoader {
         return null;
     }
 
+    private static String getJsonType(File jsonFile) {
+        try (FileReader reader = new FileReader(jsonFile)) {
+            JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
+            if (root.has("basic")) {
+                JsonObject basic = root.getAsJsonObject("basic");
+                if (basic.has("type")) {
+                    return basic.get("type").getAsString();
+                }
+            }
+        } catch (Exception e) {
+            // エラー時はデフォルトでcars扱い
+        }
+        return "cars";   // デフォルト
+    }
+
     private static void loadCarJson(File jsonFile, File objFile, File pngFile, String tabId, String idPrefix, String baseName) {
         String rawId = jsonFile.getName().replace(".json", "");
         String entityId = idPrefix + "_" + sanitizeId(rawId);
 
-        // === 新しい解析クラスを使う ===
+        // ★★★ ここを大幅変更 ★★★
+        String type = getJsonType(jsonFile);   // typeだけを先に軽く取得
+
+        if ("parts".equalsIgnoreCase(type)) {
+            // partsはCarJsonParserを通さず直接登録
+            com.hashiriyacarmod.parts.PartRegistry.register(baseName, objFile);
+            LOGGER.info("[HashiriyaCarMod] Parts登録: {}", baseName);
+            return;
+        }
+
+        // carsの場合のみCarJsonParserで詳細解析
+        if (!"cars".equalsIgnoreCase(type)) {
+            LOGGER.debug("[HashiriyaCarMod] 未知のtype='{}' のためスキップ: {}", type, rawId);
+            return;
+        }
+
+        // carsの場合のみ詳細解析を実行
         CarJsonResult result = CarJsonParser.parse(jsonFile);
 
         String displayName = result.displayName;
         float width = result.width;
         float height = result.height;
-        String type = result.type;
 
         // hitbox登録
         if (!result.hitboxes.isEmpty()) {
@@ -181,27 +211,12 @@ public class CarPackLoader {
             LOGGER.debug("[HashiriyaCarMod] {} の allowedPartGroups: {}", baseName, result.allowedPartGroups);
         }
 
-        // ==================== type ごとの処理 ====================
-        if ("cars".equalsIgnoreCase(type)) {
-            Map<String, ObjMesh> meshParts = ObjLoader.loadWithParts(objFile);
-            AssetRegistry entry = new AssetRegistry(baseName, objFile, pngFile, meshParts, result.allowedPartGroups);
-            assetRegistryMap.put(baseName, entry);
-        }
-        else if ("parts".equalsIgnoreCase(type)) {
-            // 修正箇所：CarPartLoader → PartRegistry
-            com.hashiriyacarmod.parts.PartRegistry.register(baseName, objFile);
-        }
-        else {
-            LOGGER.debug("[HashiriyaCarMod] type='{}' のためスキップ: {}", type, rawId);
-            return;
-        }
+        // cars専用処理
+        Map<String, ObjMesh> meshParts = ObjLoader.loadWithParts(objFile);
+        AssetRegistry entry = new AssetRegistry(baseName, objFile, pngFile, meshParts, result.allowedPartGroups);
+        assetRegistryMap.put(baseName, entry);
 
-        // carsの場合のみエンティティ登録を行う（partsは登録不要）
-        if (!"cars".equalsIgnoreCase(type)) {
-            return;
-        }
-
-        // ここから下は元のエンティティ登録処理（変更なし）
+        // エンティティ登録
         final String finalDisplayName = displayName;
         final float finalWidth = width;
         final float finalHeight = height;
