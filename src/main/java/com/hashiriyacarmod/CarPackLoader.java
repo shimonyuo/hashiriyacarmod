@@ -177,11 +177,6 @@ public class CarPackLoader {
             hitboxMap.put(baseName, result.hitboxes);
         }
 
-        if (!result.partGroups.isEmpty()) {
-            LOGGER.debug("[HashiriyaCarMod] {} にグループ検出: {}", baseName, result.partGroups);
-            // 将来的にここで CarEntity.setPartGroups(result.partGroups);
-        }
-
         // ==================== type ごとの処理 ====================
         if ("cars".equalsIgnoreCase(type)) {
             Map<String, ObjMesh> meshParts = ObjLoader.loadWithParts(objFile);

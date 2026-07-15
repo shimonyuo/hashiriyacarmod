@@ -25,7 +25,6 @@ public class CarJsonParser {
         float height = 1.0f;
         String type = "cars";
         List<HitboxDefinition> hitboxes = new ArrayList<>();
-        List<String> partGroups = new ArrayList<>();
 
         try (FileReader reader = new FileReader(jsonFile)) {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
@@ -91,22 +90,6 @@ public class CarJsonParser {
 
                     if (!defs.isEmpty()) {
                         hitboxes.addAll(defs);   // ここで追加
-                    }
-                }
-            }
-
-            if (root.has("parts")) {
-                JsonArray partsArray = root.getAsJsonArray("parts");
-                for (int i = 0; i < partsArray.size(); i++) {
-                    JsonObject partObj = partsArray.get(i).getAsJsonObject();
-                    if (partObj.has("group") && partObj.get("group").isJsonArray()) {
-                        JsonArray groupArray = partObj.getAsJsonArray("group");
-                        for (int j = 0; j < groupArray.size(); j++) {
-                            String group = groupArray.get(j).getAsString();
-                            if (group != null && !group.trim().isEmpty()) {
-                                partGroups.add(group.trim());
-                            }
-                        }
                     }
                 }
             }

@@ -9,7 +9,6 @@ public class CarJsonResult {
     public final float height;
     public final String type;
     public final List<HitboxDefinition> hitboxes;
-    public final List<String> partGroups;
 
     public CarJsonResult(String displayName, float width, float height, String type, List<HitboxDefinition> hitboxes) {
         this.displayName = displayName;
