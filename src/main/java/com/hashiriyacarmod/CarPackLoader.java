@@ -2,6 +2,8 @@ package com.hashiriyacarmod;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.hashiriyacarmod.cars.CarJsonParser;
+import com.hashiriyacarmod.cars.CarJsonResult;
 import com.hashiriyacarmod.parts.PartRegistry;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.core.registries.Registries;
@@ -159,106 +161,47 @@ public class CarPackLoader {
     }
 
     private static void loadCarJson(File jsonFile, File objFile, File pngFile, String tabId, String idPrefix, String baseName) {
-        String rawId    = jsonFile.getName().replace(".json", "");
+        String rawId = jsonFile.getName().replace(".json", "");
         String entityId = idPrefix + "_" + sanitizeId(rawId);
 
-        String displayName = rawId;
-        float  width       = 1.0f;   // ← デフォルト値
-        float  height      = 1.0f;
-        String type        = "cars";   // デフォルトはcars
+        // === 新しい解析クラスを使う ===
+        CarJsonResult result = CarJsonParser.parse(jsonFile);
 
-        try (FileReader reader = new FileReader(jsonFile)) {
-            JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
-            if (root.has("basic")) {
-                JsonObject basic = root.getAsJsonObject("basic");
-                if (basic.has("name"))   displayName = basic.get("name").getAsString();
-                if (basic.has("width"))  width       = basic.get("width").getAsFloat();   // ← 追加
-                if (basic.has("height")) height      = basic.get("height").getAsFloat();
-                if (basic.has("type"))   type        = basic.get("type").getAsString();
-            }
+        String displayName = result.displayName;
+        float width = result.width;
+        float height = result.height;
+        String type = result.type;
 
-            // ここから追加: hitboxの読み込みです
-            if (root.has("hitbox")) {
-                JsonObject hitboxObj = root.getAsJsonObject("hitbox");
-
-                if (hitboxObj.has("obbList")) {
-                    JsonArray obbList = hitboxObj.getAsJsonArray("obbList");
-                    List<HitboxDefinition> defs = new ArrayList<>();
-
-                    for (int obbIndex = 0; obbIndex < obbList.size(); obbIndex++) {
-                        JsonObject obb = obbList.get(obbIndex).getAsJsonObject();
-
-                        Vec3 positionOffset = Vec3.ZERO;
-                        if (obb.has("po")) {
-                            JsonArray po = obb.getAsJsonArray("po");
-                            if (po.size() >= 3) {
-                                positionOffset = new Vec3(
-                                        po.get(0).getAsDouble(),
-                                        po.get(1).getAsDouble(),
-                                        po.get(2).getAsDouble());
-                            }
-                        }
-
-                        float obbYaw = 0f, obbPitch = 0f, obbRoll = 0f;
-                        if (obb.has("ro")) {
-                            JsonArray ro = obb.getAsJsonArray("ro");
-                            if (ro.size() >= 3) {
-                                obbYaw   = ro.get(0).getAsFloat();
-                                obbPitch = ro.get(1).getAsFloat();
-                                obbRoll  = ro.get(2).getAsFloat();
-                            }
-                        }
-
-                        if (obb.has("vertices")) {
-                            JsonArray vertArray = obb.getAsJsonArray("vertices");
-                            if (vertArray.size() == 8) {
-                                Vec3[] verts = new Vec3[8];
-                                for (int i = 0; i < 8; i++) {
-                                    JsonArray p = vertArray.get(i).getAsJsonArray();
-                                    verts[i] = new Vec3(
-                                            p.get(0).getAsDouble(),
-                                            p.get(1).getAsDouble(),
-                                            p.get(2).getAsDouble());
-                                }
-                                defs.add(new HitboxDefinition(verts, positionOffset, obbYaw, obbPitch, obbRoll));
-                            } else {
-                                LOGGER.warn("[HashiriyaCarMod] obbList[{}]のverticesは8個必要です: {}",
-                                        obbIndex, jsonFile.getName());
-                            }
-                        }
-                    }
-
-                    if (!defs.isEmpty()) {
-                        hitboxMap.put(baseName, defs);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.error("[HashiriyaCarMod] JSON読み込み失敗: {} / {}", jsonFile.getName(), e.getMessage());
-            return;
+        // hitbox登録
+        if (!result.hitboxes.isEmpty()) {
+            hitboxMap.put(baseName, result.hitboxes);
         }
 
-
+        // ==================== type ごとの処理 ====================
         if ("cars".equalsIgnoreCase(type)) {
             Map<String, ObjMesh> meshParts = ObjLoader.loadWithParts(objFile);
             AssetRegistry entry = new AssetRegistry(baseName, objFile, pngFile, meshParts);
             assetRegistryMap.put(baseName, entry);
         }
-
-        if (!"cars".equalsIgnoreCase(type)) {
-            if ("parts".equalsIgnoreCase(type)) {
-                PartRegistry.register(baseName, objFile);
-            } else {
-                LOGGER.debug("[HashiriyaCarMod] type='{}' のためスキップ: {}", type, rawId);
-            }
+        else if ("parts".equalsIgnoreCase(type)) {
+            // 修正箇所：CarPartLoader → PartRegistry
+            com.hashiriyacarmod.parts.PartRegistry.register(baseName, objFile);
+        }
+        else {
+            LOGGER.debug("[HashiriyaCarMod] type='{}' のためスキップ: {}", type, rawId);
             return;
         }
 
-        // ここから先は今まで通り（carsの場合のみ登録）
+        // carsの場合のみエンティティ登録を行う（partsは登録不要）
+        if (!"cars".equalsIgnoreCase(type)) {
+            return;
+        }
+
+        // ここから下は元のエンティティ登録処理（変更なし）
         final String finalDisplayName = displayName;
-        final float  finalWidth       = width;    // ← 追加
-        final float  finalHeight      = height;
-        final String finalBaseName    = baseName;
+        final float finalWidth = width;
+        final float finalHeight = height;
+        final String finalBaseName = baseName;
 
         RegistryObject<EntityType<CarEntity>> entityType = ENTITY_TYPES.register(
                 entityId,
