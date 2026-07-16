@@ -37,54 +37,14 @@ public class WrenchItem extends Item {
         ItemStack stack = player.getItemInHand(hand);
 
         if (level.isClientSide()) {
-            // クライアント側は即座にGUIは開かず、サーバーに要求を送るだけ
+            // クライアント側はサーバーに要求を送るだけ（GUIはパケット受信後に開く）
             return InteractionResultHolder.consume(stack);
         }
 
-        // サーバー側処理
-        testServerSideCarInfo((ServerPlayer) player);
+        // サーバー側
+        sendCarDataToClient((ServerPlayer) player);
 
         return InteractionResultHolder.consume(stack);
-    }
-
-    /**
-     * クライアント側でOBB判定を行い、検知したらGUIを開きます。
-     */
-    @OnlyIn(Dist.CLIENT)
-    private static void checkAndOpenGui(Player player) {
-
-        // ── ①視線の始点・終点を計算します ──
-        Vec3 eyePos = player.getEyePosition(1.0f);
-        Vec3 lookDir = player.getViewVector(1.0f);
-
-        double reach = player.isCreative() ? 5.0 : 4.5;
-
-        Vec3 lineEnd = eyePos.add(lookDir.scale(reach));
-
-        // ── ②周囲の車エンティティを探索します ──
-        AABB searchArea = new AABB(eyePos, lineEnd).inflate(reach);
-        List<Entity> nearbyEntities = player.level().getEntities(player, searchArea, e -> e instanceof CarEntity);
-
-        boolean detected = false;
-
-        for (Entity entity : nearbyEntities) {
-            CarEntity car = (CarEntity) entity;
-            var defs = car.getHitboxDefinitions();
-            if (defs.isEmpty()) continue;
-
-            for (Vec3[] worldVertices : car.getAllWorldHitboxVertices()) {
-                if (CarCollisionUtil.lineIntersectsBox(eyePos, lineEnd, worldVertices)) {
-                    detected = true;
-                    break;
-                }
-            }
-            if (detected) break;
-        }
-
-        // ── ③検知したらGUIを開きます ──
-        if (detected) {
-            Minecraft.getInstance().setScreen(new WrenchGuiScreen());
-        }
     }
 
     @Override
@@ -93,7 +53,7 @@ public class WrenchItem extends Item {
         tooltip.add(Component.literal("車のパーツを調整するレンチ"));
     }
 
-    private void testServerSideCarInfo(ServerPlayer player) {
+    private void sendCarDataToClient(ServerPlayer player) {
         Vec3 eyePos = player.getEyePosition(1.0f);
         Vec3 lookDir = player.getViewVector(1.0f);
         double reach = player.isCreative() ? 5.0 : 4.5;
@@ -116,13 +76,15 @@ public class WrenchItem extends Item {
             }
             if (!hit) continue;
 
+            // === 両方のデータを取得 ===
             CompoundTag savedNbt = car.getSaveData();
+            List<String> groups = car.getAllowedPartGroups();   // JSON由来
 
-            // パケット送信
-            CarWrenchDataPacket packet = new CarWrenchDataPacket(car.getUUID(), savedNbt);
+            // パケット送信（NBT + グループ情報）
+            CarWrenchDataPacket packet = new CarWrenchDataPacket(car.getUUID(), savedNbt, groups);
             ModNetworking.sendToClient(player, packet);
 
-            player.sendSystemMessage(Component.literal("§6[Server] Wrenchデータをクライアントに送信しました"));
+            player.sendSystemMessage(Component.literal("§6[Server] 車データ（NBT + Groups）を送信しました"));
             break;
         }
     }

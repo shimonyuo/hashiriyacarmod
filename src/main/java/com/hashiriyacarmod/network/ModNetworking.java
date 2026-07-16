@@ -7,8 +7,6 @@ import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 
-import java.util.function.Supplier;
-
 public class ModNetworking {
 
     private static final String PROTOCOL_VERSION = "1";
@@ -27,8 +25,8 @@ public class ModNetworking {
                 CarWrenchDataPacket.class,
                 CarWrenchDataPacket::encode,
                 CarWrenchDataPacket::decode,
-                CarWrenchDataPacket::handle,
-                NetworkDirection.PLAY_TO_CLIENT
+                CarWrenchDataPacket::handle
+                // NetworkDirectionは第6引数でOptionalで渡す必要があるバージョンもあるため省略
         );
     }
 

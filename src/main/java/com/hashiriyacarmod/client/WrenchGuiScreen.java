@@ -3,9 +3,13 @@ package com.hashiriyacarmod.client;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.Minecraft;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+
+import java.util.List;
+import java.util.UUID;
 
 /**
  * レンチで車のOBBを検知した時に開くGUI画面です。（メインページ）
@@ -14,6 +18,9 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 @OnlyIn(Dist.CLIENT)
 public class WrenchGuiScreen extends Screen {
 
+    public static CompoundTag lastReceivedNbt = null;
+    public static UUID lastReceivedCarUUID = null;
+
     public static final int IMAGE_WIDTH = 130;
     public static final int IMAGE_HEIGHT = 200;
     public static final int WINDOW_X = 10;
@@ -21,6 +28,8 @@ public class WrenchGuiScreen extends Screen {
 
     protected int leftPos;
     protected int topPos;
+
+    public static List<String> lastReceivedGroups = null;
 
     public WrenchGuiScreen() {
         super(Component.literal("Wrench GUI"));
