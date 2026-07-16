@@ -318,4 +318,10 @@ public class CarEntity extends Entity {
         tag.putFloat("CarPitch", getCarPitch());
         tag.putFloat("CarRoll", getCarRoll());
     }
+
+    public CompoundTag getSaveData() {
+        CompoundTag tag = new CompoundTag();
+        this.addAdditionalSaveData(tag);   // protectedメソッドは同じクラス内なので呼べる
+        return tag;
+    }
 }

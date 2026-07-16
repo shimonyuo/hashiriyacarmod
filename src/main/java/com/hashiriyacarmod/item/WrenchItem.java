@@ -3,9 +3,12 @@ package com.hashiriyacarmod.item;
 import com.hashiriyacarmod.CarCollisionUtil;
 import com.hashiriyacarmod.CarEntity;
 import com.hashiriyacarmod.client.WrenchGuiScreen;
+import com.hashiriyacarmod.network.CarWrenchDataPacket;   // ← 追加
+import com.hashiriyacarmod.network.ModNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.Entity;
@@ -18,17 +21,10 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
-
 import java.util.List;
 
 /**
  * 車のパーツ調整に使うレンチアイテムです。
- * 右クリックすると、プレイヤーの視線方向にリーチ距離分の線を伸ばし、
- * 既存の台形型OBB(HitboxDefinition)と交差しているかを調べます。
- *
- * 判定はクライアント側だけで行い、サーバーとのパケット通信は行いません。
- * これにより、シングルプレイ・マルチプレイ両方で動作し、
- * リプレイ再生中のようなサーバーが存在しない環境でも正しく動作します。
  */
 public class WrenchItem extends Item {
 
@@ -40,14 +36,13 @@ public class WrenchItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
 
-        // ── クライアント側だけで判定・GUIを開きます ──
         if (level.isClientSide()) {
-            checkAndOpenGui(player);
+            // クライアント側は即座にGUIは開かず、サーバーに要求を送るだけ
+            return InteractionResultHolder.consume(stack);
         }
 
-        else if (!level.isClientSide()) {
-            testServerSideCarInfo(player);
-        }
+        // サーバー側処理
+        testServerSideCarInfo((ServerPlayer) player);
 
         return InteractionResultHolder.consume(stack);
     }
@@ -62,8 +57,6 @@ public class WrenchItem extends Item {
         Vec3 eyePos = player.getEyePosition(1.0f);
         Vec3 lookDir = player.getViewVector(1.0f);
 
-        // Minecraft標準のリーチ距離を使います
-        // (クリエイティブなら5.0、それ以外は4.5が標準です)
         double reach = player.isCreative() ? 5.0 : 4.5;
 
         Vec3 lineEnd = eyePos.add(lookDir.scale(reach));
@@ -100,7 +93,7 @@ public class WrenchItem extends Item {
         tooltip.add(Component.literal("車のパーツを調整するレンチ"));
     }
 
-    private void testServerSideCarInfo(Player player) {
+    private void testServerSideCarInfo(ServerPlayer player) {
         Vec3 eyePos = player.getEyePosition(1.0f);
         Vec3 lookDir = player.getViewVector(1.0f);
         double reach = player.isCreative() ? 5.0 : 4.5;
@@ -123,22 +116,13 @@ public class WrenchItem extends Item {
             }
             if (!hit) continue;
 
-            player.sendSystemMessage(Component.literal("§6=== Car Debug Info ==="));
-            player.sendSystemMessage(Component.literal("BaseName: §b" + car.getBaseName()));
-            player.sendSystemMessage(Component.literal("UUID: §b" + car.getUUID()));
+            CompoundTag savedNbt = car.getSaveData();
 
-            // JSONから登録された情報（特にgroup）
-            List<String> groups = car.getAllowedPartGroups();
-            player.sendSystemMessage(Component.literal("Allowed Part Groups: §a" + groups));
+            // パケット送信
+            CarWrenchDataPacket packet = new CarWrenchDataPacket(car.getUUID(), savedNbt);
+            ModNetworking.sendToClient(player, packet);
 
-            if (!groups.isEmpty()) {
-                for (String g : groups) {
-                    player.sendSystemMessage(Component.literal("  - §a" + g));
-                }
-            } else {
-                player.sendSystemMessage(Component.literal("  §7（グループ情報なし）"));
-            }
-
+            player.sendSystemMessage(Component.literal("§6[Server] Wrenchデータをクライアントに送信しました"));
             break;
         }
     }

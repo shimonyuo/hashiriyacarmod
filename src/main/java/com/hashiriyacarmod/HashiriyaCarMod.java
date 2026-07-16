@@ -2,6 +2,7 @@ package com.hashiriyacarmod;
 
 import com.hashiriyacarmod.item.ModCreativeTabs;
 import com.hashiriyacarmod.item.ModItems;
+import com.hashiriyacarmod.network.ModNetworking;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.fml.common.Mod;
@@ -34,5 +35,6 @@ public class HashiriyaCarMod {
         ModItems.register(eventBus);
         ModCreativeTabs.register(eventBus);
         CarPackLoader.initialize(FMLJavaModLoadingContext.get());
+        ModNetworking.register();
     }
 }
