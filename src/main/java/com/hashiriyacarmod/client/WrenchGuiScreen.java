@@ -108,4 +108,12 @@ public class WrenchGuiScreen extends Screen {
         }
         return true;
     }
+
+    @Override
+    public void onClose() {
+        super.onClose();
+        lastReceivedNbt = null;
+        lastReceivedCarUUID = null;
+        lastReceivedGroups = null;
+    }
 }
