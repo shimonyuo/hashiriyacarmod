@@ -4,6 +4,7 @@ import com.hashiriyacarmod.CarCollisionUtil;
 import com.hashiriyacarmod.CarEntity;
 import com.hashiriyacarmod.client.WrenchGuiScreen;
 import net.minecraft.client.Minecraft;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
@@ -42,6 +43,10 @@ public class WrenchItem extends Item {
         // ── クライアント側だけで判定・GUIを開きます ──
         if (level.isClientSide()) {
             checkAndOpenGui(player);
+        }
+
+        else if (!level.isClientSide()) {
+            testServerSideCarInfo(player);
         }
 
         return InteractionResultHolder.consume(stack);
@@ -93,5 +98,48 @@ public class WrenchItem extends Item {
     public void appendHoverText(ItemStack stack, Level level,
                                 List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(Component.literal("車のパーツを調整するレンチ"));
+    }
+
+    private void testServerSideCarInfo(Player player) {
+        Vec3 eyePos = player.getEyePosition(1.0f);
+        Vec3 lookDir = player.getViewVector(1.0f);
+        double reach = player.isCreative() ? 5.0 : 4.5;
+        Vec3 lineEnd = eyePos.add(lookDir.scale(reach));
+
+        AABB searchArea = new AABB(eyePos, lineEnd).inflate(reach);
+        List<Entity> nearbyEntities = player.level().getEntities(player, searchArea, e -> e instanceof CarEntity);
+
+        for (Entity entity : nearbyEntities) {
+            CarEntity car = (CarEntity) entity;
+            var defs = car.getHitboxDefinitions();
+            if (defs.isEmpty()) continue;
+
+            boolean hit = false;
+            for (Vec3[] worldVertices : car.getAllWorldHitboxVertices()) {
+                if (CarCollisionUtil.lineIntersectsBox(eyePos, lineEnd, worldVertices)) {
+                    hit = true;
+                    break;
+                }
+            }
+            if (!hit) continue;
+
+            player.sendSystemMessage(Component.literal("§6=== Car Debug Info ==="));
+            player.sendSystemMessage(Component.literal("BaseName: §b" + car.getBaseName()));
+            player.sendSystemMessage(Component.literal("UUID: §b" + car.getUUID()));
+
+            // JSONから登録された情報（特にgroup）
+            List<String> groups = car.getAllowedPartGroups();
+            player.sendSystemMessage(Component.literal("Allowed Part Groups: §a" + groups));
+
+            if (!groups.isEmpty()) {
+                for (String g : groups) {
+                    player.sendSystemMessage(Component.literal("  - §a" + g));
+                }
+            } else {
+                player.sendSystemMessage(Component.literal("  §7（グループ情報なし）"));
+            }
+
+            break;
+        }
     }
 }
