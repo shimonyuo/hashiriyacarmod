@@ -6,6 +6,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Partsページです。
  * メインページから遷移し、ここで各パーツに関する操作ができます。
@@ -17,6 +20,9 @@ public class PartsWrenchScreen extends WrenchGuiScreen {
 
     private final WrenchGuiScreen parentScreen;
 
+    private List<String> allowedPartGroups = new ArrayList<>();
+    private boolean waitingForServerData = true;
+
     // ボタン情報をクラスフィールドで保持
     private int testButtonX, testButtonY, testButtonWidth, testButtonHeight;
     private int test2ButtonX, test2ButtonY, test2ButtonWidth, test2ButtonHeight;
@@ -24,6 +30,12 @@ public class PartsWrenchScreen extends WrenchGuiScreen {
     public PartsWrenchScreen(WrenchGuiScreen parent) {
         super();
         this.parentScreen = parent;
+
+        // WrenchGuiScreenから受け取ったデータを反映
+        if (WrenchGuiScreen.lastReceivedGroups != null) {
+            this.allowedPartGroups = new ArrayList<>(WrenchGuiScreen.lastReceivedGroups);
+            this.waitingForServerData = false;
+        }
     }
 
     @Override
@@ -37,27 +49,28 @@ public class PartsWrenchScreen extends WrenchGuiScreen {
         int titleY = this.topPos + 8;
         guiGraphics.drawString(this.font, title, titleX, titleY, 0xFFFFFF);
 
-        // ── testボタン ──
-        Component testText = Component.literal("test");
-        testButtonWidth = this.font.width(testText);
-        testButtonHeight = this.font.lineHeight;
-        testButtonX = this.leftPos + (IMAGE_WIDTH - testButtonWidth) / 2;
-        testButtonY = this.topPos + 30;
+        int startY = this.topPos + 30;
+        int lineHeight = this.font.lineHeight + 6;  // Partsボタンと同じくらいの間隔
 
-        boolean hoveringTest = isMouseOver(mouseX, mouseY, testButtonX, testButtonY, testButtonWidth, testButtonHeight);
-        int testColor = hoveringTest ? 0xFFFFFF : 0xCCCCCC;
-        guiGraphics.drawString(this.font, testText, testButtonX, testButtonY, testColor);
+        if (waitingForServerData) {
+            guiGraphics.drawString(this.font, "Loading parts...", this.leftPos + 40, startY, 0xAAAAAA);
+        } else if (!allowedPartGroups.isEmpty()) {
+            for (String group : allowedPartGroups) {
+                Component groupText = Component.literal(group);
+                int textWidth = this.font.width(groupText);
+                int textX = this.leftPos + (IMAGE_WIDTH - textWidth) / 2;  // 中央寄せ
+                int textY = startY;
 
-        // ── test2ボタン ──
-        Component test2Text = Component.literal("test2");
-        test2ButtonWidth = this.font.width(test2Text);
-        test2ButtonHeight = this.font.lineHeight;
-        test2ButtonX = this.leftPos + (IMAGE_WIDTH - test2ButtonWidth) / 2;
-        test2ButtonY = this.topPos + 30 + testButtonHeight + 5;
+                boolean hovering = mouseX >= textX && mouseX <= textX + textWidth
+                        && mouseY >= textY && mouseY <= textY + this.font.lineHeight;
 
-        boolean hoveringTest2 = isMouseOver(mouseX, mouseY, test2ButtonX, test2ButtonY, test2ButtonWidth, test2ButtonHeight);
-        int test2Color = hoveringTest2 ? 0xFFFFFF : 0xCCCCCC;
-        guiGraphics.drawString(this.font, test2Text, test2ButtonX, test2ButtonY, test2Color);
+                int color = hovering ? 0xFFFFFF : 0xCCCCCC;   // Partsボタンと同じホバー色
+
+                guiGraphics.drawString(this.font, groupText, textX, textY, color);
+
+                startY += lineHeight;
+            }
+        }
     }
 
     @Override
@@ -96,5 +109,10 @@ public class PartsWrenchScreen extends WrenchGuiScreen {
             return true;
         }
         return true;
+    }
+
+    public void receivePartsInfo(List<String> groups) {
+        this.allowedPartGroups = groups != null ? new ArrayList<>(groups) : new ArrayList<>();
+        this.waitingForServerData = false;
     }
 }

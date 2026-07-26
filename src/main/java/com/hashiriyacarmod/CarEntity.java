@@ -25,7 +25,6 @@ public class CarEntity extends Entity {
     private static final EntityDataAccessor<Float> CAR_ROLL =
             SynchedEntityData.defineId(CarEntity.class, EntityDataSerializers.FLOAT);
 
-    private static final double MAX_PUSH_PER_TICK = 0.5;
 
     public CarEntity(EntityType<?> type, Level level) {
         super(type, level);
@@ -115,62 +114,16 @@ public class CarEntity extends Entity {
         return false;
     }
 
-    // ==================== 押し出しのみ（サーバー側のみ） ====================
+    @Override
+    public void onAddedToWorld() {
+        super.onAddedToWorld();
+        CarEntityRegistry.register(this);
+    }
 
     @Override
-    public void tick() {
-        super.tick();
-        if (this.level().isClientSide()) return;
-
-        List<Vec3[]> myBoxesList = getAllWorldHitboxVertices();
-        if (myBoxesList.isEmpty()) return;
-
-        for (Vec3[] myVertices : myBoxesList) {
-            pushOutOverlaps(myVertices);
-        }
-    }
-
-    private void pushOutOverlaps(Vec3[] myVertices) {
-        double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE, minZ = Double.MAX_VALUE;
-        double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE, maxZ = -Double.MAX_VALUE;
-        for (Vec3 v : myVertices) {
-            minX = Math.min(minX, v.x); maxX = Math.max(maxX, v.x);
-            minY = Math.min(minY, v.y); maxY = Math.max(maxY, v.y);
-            minZ = Math.min(minZ, v.z); maxZ = Math.max(maxZ, v.z);
-        }
-        AABB broadPhase = new AABB(minX, minY, minZ, maxX, maxY, maxZ);
-
-        for (Entity other : this.level().getEntities(this, broadPhase, e -> true)) {
-            if (other instanceof CarEntity otherCar) {
-                for (Vec3[] otherVertices : otherCar.getAllWorldHitboxVertices()) {
-                    Vec3 mtv = CarCollisionUtil.computeMTV(myVertices, otherVertices);
-                    if (mtv != null) {
-                        pushEntity(otherCar, clampPush(mtv.scale(0.5)));
-                        pushEntity(this, clampPush(mtv.scale(-0.5)));
-                    }
-                }
-            } else {
-                Vec3 mtv = CarCollisionUtil.computeMTV(myVertices, other.getBoundingBox());
-                if (mtv != null) {
-                    pushEntity(other, clampPush(mtv));
-                }
-            }
-        }
-    }
-    private Vec3 clampPush(Vec3 push) {
-        double length = push.length();
-        if (length > MAX_PUSH_PER_TICK) {
-            return push.scale(MAX_PUSH_PER_TICK / length);
-        }
-        return push;
-    }
-
-    private void pushEntity(Entity target, Vec3 push) {
-        if (push.lengthSqr() < 1.0E-9) return;
-        target.setPos(target.getX() + push.x, target.getY() + push.y, target.getZ() + push.z);
-        Vec3 currentMotion = target.getDeltaMovement();
-        target.setDeltaMovement(currentMotion.add(push.scale(0.3)));
-        target.hurtMarked = true;
+    public void onRemovedFromWorld() {
+        super.onRemovedFromWorld();
+        CarEntityRegistry.unregister(this);
     }
 
     // ==================== クライアント側専用の「引き出し」 ====================

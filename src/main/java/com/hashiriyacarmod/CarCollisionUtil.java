@@ -16,7 +16,7 @@ import java.util.List;
  */
 public class CarCollisionUtil {
 
-    private CarCollisionUtil() {}
+    public CarCollisionUtil() {}
 
     /** カスタム箱どうしが重なっているか判定します。 */
     public static boolean intersects(Vec3[] verticesA, Vec3[] verticesB) {
@@ -57,7 +57,7 @@ public class CarCollisionUtil {
      * 考え方:箱の6面すべてについて、その面の法線と、面から点への向きの
      * 内積を調べます。すべての面で「内側向き」であれば、点は箱の中にあります。
      */
-    private static boolean containsPoint(Vec3 point, Vec3[] boxVertices) {
+    public static boolean containsPoint(Vec3 point, Vec3[] boxVertices) {
         int[][] faces = HitboxDefinition.faces();
 
         for (int[] face : faces) {
@@ -93,24 +93,7 @@ public class CarCollisionUtil {
      * （Aを反対方向に動かしたい場合は、このベクトルを反転させて使ってください）
      */
     public static Vec3 computeMTV(Vec3[] verticesA, Vec3[] verticesB) {
-        Vec3 centerA = centerOf(verticesA);
-        Vec3 centerB = centerOf(verticesB);
-        Vec3 centerDiff = centerB.subtract(centerA);
-
-        // ★ポイント1：中央同士の差を「XZ平面に投影」（Y成分を0にする）
-        Vec3 centerDiffXZ = new Vec3(centerDiff.x, 0, centerDiff.z);
-        double centerDiffXZLenSq = centerDiffXZ.lengthSqr();
-
-        if (centerDiffXZLenSq < 1.0E-8) {
-            // XZ平面での水平距離がほぼ0 → 真上・真下に近い
-            // この場合は推し出さない（Y方向への推し出しは無効化）
-            return Vec3.ZERO;
-        }
-
-        // ★ポイント2：XZ平面での方向ベクトル（正規化）
-        Vec3 pushDirectionXZ = centerDiffXZ.normalize();
-
-        // ★ポイント3：まずは分離可能性を全軸で確認（SAT）
+        // SAT（分離軸定理）で全軸をチェック
         Vec3[] normalsA = faceNormals(verticesA);
         Vec3[] normalsB = faceNormals(verticesB);
         Vec3[] edgesA = edgeDirections(verticesA);
@@ -128,41 +111,57 @@ public class CarCollisionUtil {
             }
         }
 
+        Vec3 minOverlapAxis = null;
+        double minOverlap = Double.POSITIVE_INFINITY;
+
         for (Vec3 axis : axes) {
             double[] rangeA = projectRange(axis, verticesA);
             double[] rangeB = projectRange(axis, verticesB);
 
-            // この軸で「離れている」なら、そもそも重なっていない
             if (rangeA[1] < rangeB[0] || rangeB[1] < rangeA[0]) {
-                return null; // 分離できる軸が見つかった → 重なっていない
+                return null; // 分離軸発見 → 重なっていない
+            }
+
+            double overlap = Math.min(rangeA[1], rangeB[1]) - Math.max(rangeA[0], rangeB[0]);
+            if (overlap < minOverlap) {
+                minOverlap = overlap;
+                minOverlapAxis = axis;
             }
         }
 
-        // ★ポイント4：重なっているのは確定。
-        // 「XZ平面での方向」での重なり量を計算
-        double[] rangeA = projectRange(pushDirectionXZ, verticesA);
-        double[] rangeB = projectRange(pushDirectionXZ, verticesB);
-
-        double overlapAmount = Math.min(rangeA[1], rangeB[1]) - Math.max(rangeA[0], rangeB[0]);
-
-        if (overlapAmount <= 0) {
-            // 安全装置
-            overlapAmount = 0.01;
+        if (minOverlapAxis == null || minOverlap <= 0) {
+            return Vec3.ZERO;
         }
 
-        // ★ポイント5：「XZ平面の方向」に「overlapAmount」だけ推し出す
-        // Y成分は絶対に0（水平推し出しのみ）
-        return pushDirectionXZ.scale(overlapAmount);
+        // 押し出す方向を決める（Aから見てBを押し出す）
+        Vec3 centerA = centerOf(verticesA);
+        Vec3 centerB = centerOf(verticesB);
+        Vec3 toB = centerB.subtract(centerA);
+
+        // 法線がBの方向を向いていない場合は反転
+        if (minOverlapAxis.dot(toB) < 0) {
+            minOverlapAxis = minOverlapAxis.scale(-1);
+        }
+
+        return minOverlapAxis.scale(minOverlap);
     }
     /**
      * カスタム箱とAABBの「押し出しベクトル」を計算します。
      * 重なっていなければ null です。
      */
     public static Vec3 computeMTV(Vec3[] verticesA, AABB aabb) {
-        return computeMTV(verticesA, aabbVertices(aabb));
+        Vec3[] bVertices = aabbVertices(aabb);
+        Vec3 mtv = computeMTV(verticesA, bVertices);
+
+        // デバッグログ（一時的に追加）
+        if (mtv != null && mtv.lengthSqr() > 0) {
+            System.out.println("[MTV AABB] 押し出し量: " + mtv + " | 長さ: " + mtv.length());
+        }
+
+        return mtv;
     }
 
-    private static double[] projectRange(Vec3 axis, Vec3[] vertices) {
+    public static double[] projectRange(Vec3 axis, Vec3[] vertices) {
         double min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
         for (Vec3 v : vertices) {
             double d = v.dot(axis);
@@ -172,7 +171,7 @@ public class CarCollisionUtil {
         return new double[]{min, max};
     }
 
-    private static Vec3 centerOf(Vec3[] vertices) {
+    public static Vec3 centerOf(Vec3[] vertices) {
         double x = 0, y = 0, z = 0;
         for (Vec3 v : vertices) {
             x += v.x; y += v.y; z += v.z;
@@ -181,7 +180,7 @@ public class CarCollisionUtil {
         return new Vec3(x / n, y / n, z / n);
     }
 
-    private static void addAll(List<Vec3> list, Vec3[] arr) {
+    public static void addAll(List<Vec3> list, Vec3[] arr) {
         for (Vec3 v : arr) {
             if (v.lengthSqr() > 1.0E-8) {
                 list.add(v.normalize());
@@ -189,7 +188,7 @@ public class CarCollisionUtil {
         }
     }
 
-    private static Vec3[] faceNormals(Vec3[] vertices) {
+    public static Vec3[] faceNormals(Vec3[] vertices) {
         Vec3 center = centerOf(vertices);
         int[][] faces = HitboxDefinition.faces();
         Vec3[] normals = new Vec3[faces.length];

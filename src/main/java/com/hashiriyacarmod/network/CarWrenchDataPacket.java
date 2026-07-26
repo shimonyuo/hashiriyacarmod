@@ -36,6 +36,7 @@ public class CarWrenchDataPacket {
             WrenchGuiScreen.lastReceivedCarUUID = msg.carUUID;
             WrenchGuiScreen.lastReceivedGroups = msg.allowedGroups;
 
+            // メインメニューだけを開く（Parts画面はボタンクリックで）
             Minecraft.getInstance().setScreen(new WrenchGuiScreen());
         });
         ctx.get().setPacketHandled(true);
