@@ -1,11 +1,9 @@
 package com.hashiriyacarmod.network;
 
-import com.hashiriyacarmod.client.WrenchGuiScreen;
-import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.player.Player;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.List;
@@ -18,7 +16,6 @@ public class CarWrenchDataPacket {
     private final CompoundTag nbtData;
     private final List<String> allowedGroups;
 
-    // 3引数コンストラクタ（これを使う）
     public CarWrenchDataPacket(UUID carUUID, CompoundTag nbtData, List<String> allowedGroups) {
         this.carUUID = carUUID;
         this.nbtData = nbtData;
@@ -27,17 +24,8 @@ public class CarWrenchDataPacket {
 
     public static void handle(CarWrenchDataPacket msg, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            Player player = Minecraft.getInstance().player;
-            if (player == null) return;
-
-            player.sendSystemMessage(Component.literal("§a[Client] Wrenchデータを受信しました！ UUID: " + msg.carUUID));
-
-            WrenchGuiScreen.lastReceivedNbt = msg.nbtData;
-            WrenchGuiScreen.lastReceivedCarUUID = msg.carUUID;
-            WrenchGuiScreen.lastReceivedGroups = msg.allowedGroups;
-
-            // メインメニューだけを開く（Parts画面はボタンクリックで）
-            Minecraft.getInstance().setScreen(new WrenchGuiScreen());
+            // クライアント側でのみ実行する
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientPacketHandler.handleWrenchData(msg));
         });
         ctx.get().setPacketHandled(true);
     }
@@ -54,4 +42,9 @@ public class CarWrenchDataPacket {
         List<String> groups = buf.readList(FriendlyByteBuf::readUtf);
         return new CarWrenchDataPacket(uuid, nbt, groups);
     }
+
+    // ゲッター（ClientPacketHandler から使う）
+    public UUID getCarUUID() { return carUUID; }
+    public CompoundTag getNbtData() { return nbtData; }
+    public List<String> getAllowedGroups() { return allowedGroups; }
 }

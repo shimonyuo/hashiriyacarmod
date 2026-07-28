@@ -75,27 +75,8 @@ public class PartsWrenchScreen extends WrenchGuiScreen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (isMouseOver((int)mouseX, (int)mouseY, testButtonX, testButtonY, testButtonWidth, testButtonHeight)) {
-            if (Minecraft.getInstance().player != null) {
-                Minecraft.getInstance().player.displayClientMessage(
-                        Component.literal("§6test button clicked!"),
-                        false
-                );
-            }
-            return true;
-        }
 
-        if (isMouseOver((int)mouseX, (int)mouseY, test2ButtonX, test2ButtonY, test2ButtonWidth, test2ButtonHeight)) {
-            if (Minecraft.getInstance().player != null) {
-                Minecraft.getInstance().player.displayClientMessage(
-                        Component.literal("§e[test2] This is test2 button!"),
-                        false
-                );
-            }
-            return true;
-        }
-
-        return super.mouseClicked(mouseX, mouseY, button);
+        return true;  // クリックを消費して親に渡さない
     }
 
     private boolean isMouseOver(int mouseX, int mouseY, int x, int y, int width, int height) {

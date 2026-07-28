@@ -62,6 +62,9 @@ public class WrenchItem extends Item {
         AABB searchArea = new AABB(eyePos, lineEnd).inflate(reach);
         List<Entity> nearbyEntities = player.level().getEntities(player, searchArea, e -> e instanceof CarEntity);
 
+        CarEntity closestCar = null;
+        double closestDistanceSq = Double.MAX_VALUE;
+
         for (Entity entity : nearbyEntities) {
             CarEntity car = (CarEntity) entity;
             var defs = car.getHitboxDefinitions();
@@ -76,16 +79,23 @@ public class WrenchItem extends Item {
             }
             if (!hit) continue;
 
-            // === 両方のデータを取得 ===
-            CompoundTag savedNbt = car.getSaveData();
-            List<String> groups = car.getAllowedPartGroups();   // JSON由来
-
-            // パケット送信（NBT + グループ情報）
-            CarWrenchDataPacket packet = new CarWrenchDataPacket(car.getUUID(), savedNbt, groups);
-            ModNetworking.sendToClient(player, packet);
-
-            player.sendSystemMessage(Component.literal("§6[Server] 車データ（NBT + Groups）を送信しました"));
-            break;
+            // 視線始点からの距離を計算
+            double distSq = eyePos.distanceToSqr(car.position());
+            if (distSq < closestDistanceSq) {
+                closestDistanceSq = distSq;
+                closestCar = car;
+            }
         }
+
+        if (closestCar == null) return;
+
+        // 一番近い車のデータを送信
+        CompoundTag savedNbt = closestCar.getSaveData();
+        List<String> groups = closestCar.getAllowedPartGroups();
+
+        CarWrenchDataPacket packet = new CarWrenchDataPacket(closestCar.getUUID(), savedNbt, groups);
+        ModNetworking.sendToClient(player, packet);
+
+        player.sendSystemMessage(Component.literal("§6[Server] 車データ（NBT + Groups）を送信しました"));
     }
 }
