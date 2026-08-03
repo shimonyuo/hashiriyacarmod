@@ -5,6 +5,7 @@ import com.hashiriyacarmod.CarEntity;
 import com.hashiriyacarmod.CarEntityRegistry;
 import com.hashiriyacarmod.CarGroundNormalHolder;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -12,31 +13,19 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import javax.annotation.Nullable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Entity.class)
 public abstract class CarHitboxSupportMixin implements CarGroundNormalHolder {
 
     private static final double ON_GROUND_THRESHOLD = Math.cos(Math.toRadians(45.0));
+    private static final double EPS = 1.0E-10;
 
     @Unique
-    @Nullable
-    private Vec3 hashiriyacarmod$groundNormal = null;
+    private boolean hashiriyacarmod$carGroundThisMove = false;
 
     @Unique
     private boolean hashiriyacarmod$shouldSkipEdge = false;
-
-    @Override
-    public Vec3 hashiriyacarmod$getGroundNormal() {
-        return this.hashiriyacarmod$groundNormal;
-    }
-
-    @Override
-    public void hashiriyacarmod$setGroundNormal(@Nullable Vec3 normal) {
-        this.hashiriyacarmod$groundNormal = normal;
-    }
 
     @Override
     public boolean hashiriyacarmod$shouldSkipEdge() {
@@ -48,130 +37,209 @@ public abstract class CarHitboxSupportMixin implements CarGroundNormalHolder {
         this.hashiriyacarmod$shouldSkipEdge = skip;
     }
 
-    /**
-     * バニラ掃引（collide）への条件追加。
-     * getBoundingBox().expandTowards(movement) はバニラ本体と同じ伸ばし方です。
-     */
-    @Inject(
-            method = "collide",
-            at = @At("HEAD")
+    @ModifyVariable(
+            method = "move(Lnet/minecraft/world/entity/MoverType;Lnet/minecraft/world/phys/Vec3;)V",
+            at = @At("HEAD"),
+            argsOnly = true,
+            ordinal = 0
     )
-    private void hashiriyacarmod$onVanillaSweep(Vec3 movement, CallbackInfoReturnable<Vec3> cir) {
+    private Vec3 hashiriyacarmod$slideAlongCarObb(Vec3 movement) {
         Entity self = (Entity) (Object) this;
+        this.hashiriyacarmod$carGroundThisMove = false;
         this.hashiriyacarmod$setShouldSkipEdge(false);
 
-        if (self instanceof CarEntity) return;
-        if (movement.lengthSqr() < 1.0E-10) return;
-
-        // バニラ collide 内と同じ：移動方向に AABB を伸ばす
-        AABB sweptBox = self.getBoundingBox().expandTowards(movement.x, movement.y, movement.z);
-        Vec3[] sweptVertices = aabbToVertices(sweptBox);
-
-        for (CarEntity car : CarEntityRegistry.getAllInLevel(self.level())) {
-            if (car.isRemoved()) continue;
-            for (Vec3[] obbVertices : car.getAllWorldHitboxVertices()) {
-                Vec3 mtv = CarCollisionUtil.computeMTV(obbVertices, sweptVertices);
-                if (mtv != null && mtv.lengthSqr() >= 1.0E-10) {
-                    this.hashiriyacarmod$setShouldSkipEdge(true);
-                    return;
-                }
-            }
-        }
-    }
-
-    @ModifyVariable(
-            method = "setDeltaMovement(Lnet/minecraft/world/phys/Vec3;)V",
-            at = @At("HEAD"),
-            argsOnly = true
-    )
-    private Vec3 slideAlongObbSurface(Vec3 movement) {
-        Entity self = (Entity) (Object) this;
-
         if (self instanceof CarEntity) return movement;
-        if (movement.lengthSqr() < 1.0E-10) return movement;
+        if (self.level() == null) return movement;
+        if (self.isSpectator()) return movement;
 
         AABB box = self.getBoundingBox();
-        Vec3[] playerVertices = aabbToVertices(box);
-
         Vec3 result = movement;
-        boolean shouldBeOnGround = false;
+        boolean hasMovement = movement.lengthSqr() >= EPS;
 
-        java.util.List<Vec3> groundNormals = new java.util.ArrayList<>();
-        java.util.List<Double> groundMtvLengths = new java.util.ArrayList<>();
-        java.util.List<Vec3> wallNormals = new java.util.ArrayList<>();
-        java.util.List<Vec3> wallMtvs = new java.util.ArrayList<>();
-
-        for (CarEntity car : CarEntityRegistry.getAllInLevel(self.level())) {
-            if (car.isRemoved()) continue;
-
-            for (Vec3[] obbVertices : car.getAllWorldHitboxVertices()) {
-                Vec3 mtv = CarCollisionUtil.computeMTV(obbVertices, playerVertices);
-                if (mtv == null || mtv.lengthSqr() < 1.0E-10) continue;
-
-                Vec3 normal = mtv.normalize();
-                if (normal.y >= ON_GROUND_THRESHOLD) {
-                    groundNormals.add(normal);
-                    groundMtvLengths.add(mtv.length());
-                    shouldBeOnGround = true;
-                } else {
-                    wallNormals.add(normal);
-                    wallMtvs.add(mtv);
+        // ★ 独自拡張ボックスが OBB と重なったら端止めスキップ用フラグを立てる
+        if (hasMovement) {
+            AABB expandedByMovement = box.expandTowards(movement.x, movement.y, movement.z);
+            Vec3[] expandedVertices = aabbToVertices(expandedByMovement);
+            for (CarEntity car : CarEntityRegistry.getAllInLevel(self.level())) {
+                if (car.isRemoved()) continue;
+                for (Vec3[] obbVertices : car.getAllWorldHitboxVertices()) {
+                    Vec3 mtv = CarCollisionUtil.computeMTV(obbVertices, expandedVertices);
+                    if (mtv != null && mtv.lengthSqr() >= EPS) {
+                        this.hashiriyacarmod$setShouldSkipEdge(true);
+                        break;
+                    }
                 }
+                if (this.hashiriyacarmod$shouldSkipEdge) break;
+            }
+        }
+        // すでに本体が重なっている場合も端止めオフ
+        if (!this.hashiriyacarmod$shouldSkipEdge) {
+            Vec3[] boxVertices = aabbToVertices(box);
+            for (CarEntity car : CarEntityRegistry.getAllInLevel(self.level())) {
+                if (car.isRemoved()) continue;
+                for (Vec3[] obbVertices : car.getAllWorldHitboxVertices()) {
+                    Vec3 mtv = CarCollisionUtil.computeMTV(obbVertices, boxVertices);
+                    if (mtv != null && mtv.lengthSqr() >= EPS) {
+                        this.hashiriyacarmod$setShouldSkipEdge(true);
+                        break;
+                    }
+                }
+                if (this.hashiriyacarmod$shouldSkipEdge) break;
             }
         }
 
-        if (shouldBeOnGround) {
-            for (int i = 0; i < groundNormals.size(); i++) {
-                Vec3 normal = groundNormals.get(i);
+        // 1回目：0〜45度面だけ
+        result = processHits(self, box, result, hasMovement, true);
+        box = self.getBoundingBox();
 
-                double dot = result.dot(normal);
-                Vec3 slideResult = dot < 0
-                        ? result.subtract(normal.scale(dot))
-                        : result;
-
-                if (result.y < 0) {
-                    Vec3 gravityOnly = new Vec3(0, result.y, 0);
-                    double gravDot = gravityOnly.dot(normal);
-                    Vec3 gravParallel = gravityOnly.subtract(normal.scale(gravDot));
-                    Vec3 gravCancel = gravParallel.scale(-1.0);
-                    slideResult = slideResult.add(gravCancel);
-                }
-
-                result = slideResult;
-            }
-
-            double maxMtvLength = groundMtvLengths.stream()
-                    .mapToDouble(Double::doubleValue).max().orElse(0);
-            self.setPos(self.getX(), self.getY() + maxMtvLength, self.getZ());
-
-        } else {
-            for (int i = 0; i < wallNormals.size(); i++) {
-                Vec3 normal = wallNormals.get(i);
-                Vec3 mtv = wallMtvs.get(i);
-
-                double dot = result.dot(normal);
-                if (dot < 0) {
-                    result = result.subtract(normal.scale(dot));
-                }
-
-                self.setPos(
-                        self.getX() + mtv.x,
-                        self.getY() + mtv.y,
-                        self.getZ() + mtv.z
-                );
-            }
-        }
-
-        if (shouldBeOnGround) {
-            self.setOnGround(true);
-            this.hashiriyacarmod$setGroundNormal(groundNormals.get(0));
-        } else {
-            this.hashiriyacarmod$setGroundNormal(null);
-        }
+        // 2回目：壁だけ（地面のあと）
+        result = processHits(self, box, result, hasMovement, false);
 
         return result;
     }
 
+    /**
+     * @param groundPass true = 0〜45度面だけ / false = 壁だけ
+     */
+    @Unique
+    private Vec3 processHits(Entity self, AABB box, Vec3 result, boolean hasMovement, boolean groundPass) {
+        for (CarEntity car : CarEntityRegistry.getAllInLevel(self.level())) {
+            if (car.isRemoved()) continue;
+
+            for (Vec3[] obbVertices : car.getAllWorldHitboxVertices()) {
+
+                // ① すでに重なっている
+                Vec3 mtvNow = CarCollisionUtil.computeMTV(obbVertices, aabbToVertices(box));
+                if (mtvNow != null && mtvNow.lengthSqr() >= EPS) {
+                    Vec3 normal = mtvNow.normalize();
+                    boolean ground = normal.y >= ON_GROUND_THRESHOLD;
+
+                    if (ground != groundPass) {
+                        continue;
+                    }
+
+                    if (hasMovement) {
+                        result = respondToSurface(result, normal, ground);
+                    }
+                    applyVelocityResponse(self, normal, ground);
+
+                    self.setPos(
+                            self.getX() + mtvNow.x,
+                            self.getY() + mtvNow.y,
+                            self.getZ() + mtvNow.z
+                    );
+                    if (ground) {
+                        this.hashiriyacarmod$carGroundThisMove = true;
+                    }
+                    box = self.getBoundingBox();
+                    continue;
+                }
+
+                if (!hasMovement) continue;
+
+                // ② 移動量分だけ拡大した検知ボックス
+                AABB swept = box.expandTowards(result.x, result.y, result.z);
+                Vec3 mtvSwept = CarCollisionUtil.computeMTV(obbVertices, aabbToVertices(swept));
+                if (mtvSwept == null || mtvSwept.lengthSqr() < EPS) {
+                    continue;
+                }
+
+                Vec3 normal = mtvSwept.normalize();
+                boolean ground = normal.y >= ON_GROUND_THRESHOLD;
+
+                if (ground != groundPass) {
+                    continue;
+                }
+
+                double toi = findTimeOfImpact(box, result, obbVertices);
+                toi = Math.max(0.0, Math.min(1.0, toi));
+
+                Vec3 toContact = result.scale(toi);
+                Vec3 remaining = result.subtract(toContact);
+
+                AABB atContact = box.move(toContact.x, toContact.y, toContact.z);
+                Vec3 mtvContact = CarCollisionUtil.computeMTV(obbVertices, aabbToVertices(atContact));
+                if (mtvContact != null && mtvContact.lengthSqr() >= EPS) {
+                    normal = mtvContact.normalize();
+                    ground = normal.y >= ON_GROUND_THRESHOLD;
+                    if (ground != groundPass) {
+                        continue;
+                    }
+                }
+
+                if (ground) {
+                    this.hashiriyacarmod$carGroundThisMove = true;
+                }
+
+                remaining = respondToSurface(remaining, normal, ground);
+                result = toContact.add(remaining);
+
+                applyVelocityResponse(self, normal, ground);
+            }
+        }
+        return result;
+    }
+
+    @Inject(
+            method = "move(Lnet/minecraft/world/entity/MoverType;Lnet/minecraft/world/phys/Vec3;)V",
+            at = @At("RETURN")
+    )
+    private void hashiriyacarmod$finalizeCarOnGround(MoverType type, Vec3 movement, CallbackInfo ci) {
+        if (this.hashiriyacarmod$carGroundThisMove) {
+            ((Entity) (Object) this).setOnGround(true);
+        }
+        this.hashiriyacarmod$carGroundThisMove = false;
+    }
+
+    @Unique
+    private static Vec3 respondToSurface(Vec3 v, Vec3 normal, boolean ground) {
+        if (ground && v.y < 0.0) {
+            v = new Vec3(v.x, 0.0, v.z);
+        }
+        return projectAlongSurface(v, normal);
+    }
+
+    @Unique
+    private static void applyVelocityResponse(Entity self, Vec3 normal, boolean ground) {
+        Vec3 vel = self.getDeltaMovement();
+        Vec3 adjusted = respondToSurface(vel, normal, ground);
+        if (adjusted.x != vel.x || adjusted.y != vel.y || adjusted.z != vel.z) {
+            self.setDeltaMovement(adjusted);
+        }
+    }
+
+    @Unique
+    private static Vec3 projectAlongSurface(Vec3 v, Vec3 normal) {
+        double dot = v.dot(normal);
+        if (dot < 0.0) {
+            return v.subtract(normal.scale(dot));
+        }
+        return v;
+    }
+
+    @Unique
+    private static double findTimeOfImpact(AABB box, Vec3 movement, Vec3[] obbVertices) {
+        if (movement.lengthSqr() < EPS) return 1.0;
+        if (CarCollisionUtil.computeMTV(obbVertices, aabbToVertices(box)) != null) return 0.0;
+
+        AABB expanded = box.expandTowards(movement.x, movement.y, movement.z);
+        if (CarCollisionUtil.computeMTV(obbVertices, aabbToVertices(expanded)) == null) return 1.0;
+
+        double lo = 0.0;
+        double hi = 1.0;
+        for (int i = 0; i < 16; i++) {
+            double mid = (lo + hi) * 0.5;
+            AABB at = box.move(movement.x * mid, movement.y * mid, movement.z * mid);
+            if (CarCollisionUtil.computeMTV(obbVertices, aabbToVertices(at)) != null) {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        return hi;
+    }
+
+    @Unique
     private static Vec3[] aabbToVertices(AABB box) {
         return new Vec3[]{
                 new Vec3(box.minX, box.minY, box.minZ),

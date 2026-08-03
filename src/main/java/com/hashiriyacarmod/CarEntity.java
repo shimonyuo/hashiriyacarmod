@@ -28,7 +28,6 @@ public class CarEntity extends Entity {
 
     public CarEntity(EntityType<?> type, Level level) {
         super(type, level);
-        this.noCulling = true;
     }
 
     @Override
@@ -65,12 +64,83 @@ public class CarEntity extends Entity {
         }
     }
 
+    private AABB computeAabbFromAllObbs() {
+        List<Vec3[]> all = getAllWorldHitboxVertices();
+        if (all.isEmpty()) {
+            double x = this.getX();
+            double y = this.getY();
+            double z = this.getZ();
+            return new AABB(x, y, z, x, y, z);
+        }
+
+        double minX = Double.POSITIVE_INFINITY;
+        double minY = Double.POSITIVE_INFINITY;
+        double minZ = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY;
+        double maxY = Double.NEGATIVE_INFINITY;
+        double maxZ = Double.NEGATIVE_INFINITY;
+
+        for (Vec3[] verts : all) {
+            for (Vec3 v : verts) {
+                minX = Math.min(minX, v.x);
+                minY = Math.min(minY, v.y);
+                minZ = Math.min(minZ, v.z);
+                maxX = Math.max(maxX, v.x);
+                maxY = Math.max(maxY, v.y);
+                maxZ = Math.max(maxZ, v.z);
+            }
+        }
+        return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    /** 姿勢が変わったあとに呼ぶ。本体 AABB を OBB 囲いに合わせる。 */
+    public void refreshObbBoundingBox() {
+        this.setBoundingBox(computeAabbFromAllObbs());
+    }
+
+    /**
+     * バニラが位置から箱を作るときの入口。
+     * 寸法(width/height)ではなく、常に OBB 囲いを返す。
+     *
+     * ※ mappings によっては makeBoundingBox(Vec3) の方だけがある。
+     *    その場合は下の「Vec3版」を使う。
+     */
+    @Override
+    protected AABB makeBoundingBox() {
+        return computeAabbFromAllObbs();
+    }
+
+    // Vec3 版がある環境用（どちらか一方でコンパイルが通る方を残す）
+    // @Override
+    // protected AABB makeBoundingBox(Vec3 pos) {
+    //     // pos 基準で OBB を再計算したい場合は getAllWorldHitboxVertices を pos 対応にする
+    //     return computeAabbFromAllObbs();
+    // }
+
+    @Override
+    public void tick() {
+        super.tick();
+        // 毎tick：yaw / pitch / roll 反映後の OBB で本体 AABB を更新
+        refreshObbBoundingBox();
+    }
+
+    @Override
+    public void setYRot(float yRot) {
+        super.setYRot(yRot);
+        if (this.level() != null) {
+            refreshObbBoundingBox();
+        }
+    }
+
     public float getCarPitch() {
         return this.entityData.get(CAR_PITCH);
     }
 
     public void setCarPitch(float pitch) {
         this.entityData.set(CAR_PITCH, pitch);
+        if (this.level() != null) {
+            refreshObbBoundingBox();
+        }
     }
 
     public float getCarRoll() {
@@ -79,6 +149,9 @@ public class CarEntity extends Entity {
 
     public void setCarRoll(float roll) {
         this.entityData.set(CAR_ROLL, roll);
+        if (this.level() != null) {
+            refreshObbBoundingBox();
+        }
     }
 
     @OnlyIn(Dist.CLIENT)

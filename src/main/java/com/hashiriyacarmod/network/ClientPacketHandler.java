@@ -14,8 +14,6 @@ public class ClientPacketHandler {
         Player player = Minecraft.getInstance().player;
         if (player == null) return;
 
-        player.sendSystemMessage(Component.literal("§a[Client] Wrenchデータを受信しました！ UUID: " + msg.getCarUUID()));
-
         WrenchGuiScreen.lastReceivedNbt = msg.getNbtData();
         WrenchGuiScreen.lastReceivedCarUUID = msg.getCarUUID();
         WrenchGuiScreen.lastReceivedGroups = msg.getAllowedGroups();

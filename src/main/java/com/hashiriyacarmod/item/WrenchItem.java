@@ -95,7 +95,5 @@ public class WrenchItem extends Item {
 
         CarWrenchDataPacket packet = new CarWrenchDataPacket(closestCar.getUUID(), savedNbt, groups);
         ModNetworking.sendToClient(player, packet);
-
-        player.sendSystemMessage(Component.literal("§6[Server] 車データ（NBT + Groups）を送信しました"));
     }
 }
