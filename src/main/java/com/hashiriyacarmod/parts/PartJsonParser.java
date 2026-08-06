@@ -9,7 +9,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,7 +40,8 @@ public class PartJsonParser {
             return PartJsonResult.empty(fallbackName);
         }
 
-        try (FileReader reader = new FileReader(jsonFile)) {
+        try (InputStreamReader reader = new InputStreamReader(
+                new FileInputStream(jsonFile), StandardCharsets.UTF_8)) {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
 
             if (root.has("basic") && root.get("basic").isJsonObject()) {

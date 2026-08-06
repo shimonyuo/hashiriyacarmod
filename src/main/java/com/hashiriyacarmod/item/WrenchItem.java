@@ -37,10 +37,10 @@ public class WrenchItem extends Item {
         ItemStack stack = player.getItemInHand(hand);
 
         if (level.isClientSide()) {
-            // クライアント側はサーバーに要求を送るだけ（GUIはパケット受信後に開く）
+            // 自分が開こうとした印（リプレイのパケット再生だけでは開かない）
+            WrenchGuiScreen.expectGuiFromServer = true;
             return InteractionResultHolder.consume(stack);
         }
-
         // サーバー側
         sendCarDataToClient((ServerPlayer) player);
 

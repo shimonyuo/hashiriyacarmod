@@ -31,6 +31,8 @@ public class WrenchGuiScreen extends Screen {
 
     public static List<String> lastReceivedGroups = null;
 
+    public static boolean expectGuiFromServer = false;
+
     public WrenchGuiScreen() {
         super(Component.literal("Wrench GUI"));
     }

@@ -7,6 +7,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,8 @@ public class PartRegistry {
     private static final Map<String, Map<String, ObjMesh>> partMeshMap = new LinkedHashMap<>();
     /** baseName → パーツJSONの group（静的） */
     private static final Map<String, List<String>> partGroupMap = new LinkedHashMap<>();
+
+    private static final Map<String, String> partDisplayNameMap = new LinkedHashMap<>();
 
     /** 従来どおり（group なし） */
     public static void register(String baseName, File objFile) {
@@ -55,6 +58,12 @@ public class PartRegistry {
     public static void register(String baseName, File objFile, File jsonFile) {
         PartJsonResult parsed = PartJsonParser.parse(jsonFile);
         register(baseName, objFile, parsed.groups);
+        // ★ 追加：メニュー用表示名
+        String name = parsed.displayName;
+        if (name == null || name.isEmpty()) {
+            name = baseName;
+        }
+        partDisplayNameMap.put(baseName, name);
     }
 
     public static Map<String, ObjMesh> getPartMeshes(String baseName) {
@@ -66,6 +75,21 @@ public class PartRegistry {
         return g != null ? g : List.of();
     }
 
+    public static String getDisplayName(String baseName) {
+        String n = partDisplayNameMap.get(baseName);
+        return n != null ? n : baseName;
+    }
+
+    public static List<String> getBaseNamesForGroup(String group) {
+        List<String> out = new ArrayList<>();
+        if (group == null || group.isEmpty()) return out;
+        for (Map.Entry<String, List<String>> e : partGroupMap.entrySet()) {
+            if (e.getValue().contains(group)) {
+                out.add(e.getKey());
+            }
+        }
+        return out;
+    }
     public static boolean matchesCarGroups(String partBaseName, List<String> carAllowedGroups) {
         if (carAllowedGroups == null || carAllowedGroups.isEmpty()) return false;
         List<String> partGroups = getPartGroups(partBaseName);

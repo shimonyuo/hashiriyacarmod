@@ -75,13 +75,33 @@ public class PartsWrenchScreen extends WrenchGuiScreen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (waitingForServerData || allowedPartGroups.isEmpty()) {
+            return true;
+        }
 
-        return true;  // クリックを消費して親に渡さない
+        int startY = this.topPos + 30;
+        int lineHeight = this.font.lineHeight + 6;
+
+        for (String group : allowedPartGroups) {
+            Component groupText = Component.literal(group);
+            int textWidth = this.font.width(groupText);
+            int textX = this.leftPos + (IMAGE_WIDTH - textWidth) / 2;
+            int textY = startY;
+
+            boolean clicked = mouseX >= textX && mouseX <= textX + textWidth
+                    && mouseY >= textY && mouseY <= textY + this.font.lineHeight;
+
+            if (clicked) {
+                Minecraft.getInstance().setScreen(new PartGroupWrenchScreen(this, group));
+                return true;
+            }
+
+            startY += lineHeight;
+        }
+
+        return true;
     }
 
-    private boolean isMouseOver(int mouseX, int mouseY, int x, int y, int width, int height) {
-        return mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height;
-    }
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {

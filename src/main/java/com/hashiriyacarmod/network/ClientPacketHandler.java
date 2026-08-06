@@ -18,6 +18,12 @@ public class ClientPacketHandler {
         WrenchGuiScreen.lastReceivedCarUUID = msg.getCarUUID();
         WrenchGuiScreen.lastReceivedGroups = msg.getAllowedGroups();
 
+        // リプレイなどで「パケットだけ」来たときは開かない
+        if (!WrenchGuiScreen.expectGuiFromServer) {
+            return;
+        }
+        WrenchGuiScreen.expectGuiFromServer = false;
+
         Minecraft.getInstance().setScreen(new WrenchGuiScreen());
     }
 }
