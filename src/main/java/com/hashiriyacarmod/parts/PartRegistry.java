@@ -8,25 +8,29 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * type:"parts" のJSONと同名OBJを紐づけて管理するローダーです。
  * エンティティ登録は行いません。
- * CarPackLoaderがJSONを発見した際に、このクラスのregister()を呼び出します。
+ * JSON要素の解釈は PartJsonParser、保持はここ、という分担です。
  */
 public class PartRegistry {
 
     private static final Logger LOGGER = LogManager.getLogger(HashiriyaCarMod.MOD_ID);
 
-    // baseName → ObjMesh の対応を保持します
     private static final Map<String, Map<String, ObjMesh>> partMeshMap = new LinkedHashMap<>();
+    /** baseName → パーツJSONの group（静的） */
+    private static final Map<String, List<String>> partGroupMap = new LinkedHashMap<>();
 
-    /**
-     * CarPackLoaderから呼ばれます。
-     * objFileが見つかっていればOBJを読み込み、ログを出します。
-     */
+    /** 従来どおり（group なし） */
     public static void register(String baseName, File objFile) {
+        register(baseName, objFile, List.of());
+    }
+
+    /** group 付き登録 */
+    public static void register(String baseName, File objFile, List<String> groups) {
         if (objFile == null || !objFile.exists()) {
             LOGGER.warn("[PartRegistry] OBJが見つかりません: {}", baseName);
             return;
@@ -39,15 +43,36 @@ public class PartRegistry {
         }
 
         partMeshMap.put(baseName, meshParts);
-        LOGGER.info("[PartRegistry] パーツ登録完了: {} ({} パーツ, OBJ: {})",
-                baseName, meshParts.size(), objFile.getName());
+        partGroupMap.put(baseName, groups != null ? List.copyOf(groups) : List.of());
+        LOGGER.info("[PartRegistry] パーツ登録完了: {} ({} メッシュ, groups={})",
+                baseName, meshParts.size(), partGroupMap.get(baseName));
     }
 
     /**
-     * baseNameに対応するパーツのOBJメッシュを返します。
-     * 登録されていない場合はnullです。
+     * JSONファイルも渡せる版。
+     * PartJsonParser で group 等を読み、メッシュと一緒に登録する。
      */
+    public static void register(String baseName, File objFile, File jsonFile) {
+        PartJsonResult parsed = PartJsonParser.parse(jsonFile);
+        register(baseName, objFile, parsed.groups);
+    }
+
     public static Map<String, ObjMesh> getPartMeshes(String baseName) {
         return partMeshMap.get(baseName);
+    }
+
+    public static List<String> getPartGroups(String baseName) {
+        List<String> g = partGroupMap.get(baseName);
+        return g != null ? g : List.of();
+    }
+
+    public static boolean matchesCarGroups(String partBaseName, List<String> carAllowedGroups) {
+        if (carAllowedGroups == null || carAllowedGroups.isEmpty()) return false;
+        List<String> partGroups = getPartGroups(partBaseName);
+        if (partGroups.isEmpty()) return false;
+        for (String pg : partGroups) {
+            if (carAllowedGroups.contains(pg)) return true;
+        }
+        return false;
     }
 }

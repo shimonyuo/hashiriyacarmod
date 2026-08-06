@@ -17,6 +17,8 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import org.joml.Matrix4f;
 
+import java.util.Map;
+
 @OnlyIn(Dist.CLIENT)
 public class CarEntityRenderer extends EntityRenderer<CarEntity> {
 
@@ -63,6 +65,26 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
             Matrix4f partMatrix = new Matrix4f(poseStack.last().pose());
             drawMeshOnGpu(entity, partName, mesh, partMatrix, texLoc, packedLight);
             poseStack.popPose();
+        }
+        for (String attachedName : entity.getAttachedParts()) {
+            // 本体 cars に同じ group が無ければ OBJ を描かない
+            if (!PartRegistry.matchesCarGroups(attachedName, entity.getAllowedPartGroups())) {
+                continue;
+            }
+
+            Map<String, ObjMesh> attachedMeshes = PartRegistry.getPartMeshes(attachedName);
+            if (attachedMeshes == null || attachedMeshes.isEmpty()) continue;
+
+            for (var entry : attachedMeshes.entrySet()) {
+                String partName = attachedName + "/" + entry.getKey();
+                ObjMesh mesh = entry.getValue();
+
+                poseStack.pushPose();
+                // オフセットなし = 本体 0,0,0
+                Matrix4f partMatrix = new Matrix4f(poseStack.last().pose());
+                drawMeshOnGpu(entity, partName, mesh, partMatrix, texLoc, packedLight);
+                poseStack.popPose();
+            }
         }
 
         poseStack.popPose();

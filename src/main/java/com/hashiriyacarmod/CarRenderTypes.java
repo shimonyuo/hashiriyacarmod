@@ -41,7 +41,7 @@ public class CarRenderTypes extends RenderStateShard {
                 RenderType.CompositeState state = RenderType.CompositeState.builder()
                         .setShaderState(new RenderStateShard.ShaderStateShard(() ->
                                 isShadersEnabled()
-                                        ? net.minecraft.client.renderer.GameRenderer.getRendertypeEntityCutoutNoCullShader()
+                                        ? net.minecraft.client.renderer.GameRenderer.getRendertypeEntityCutoutShader()
                                         : carEntityShader
                         ))
                         .setTextureState(new RenderStateShard.TextureStateShard(texture, false, false))

@@ -24,6 +24,8 @@ public class CarEntity extends Entity {
             SynchedEntityData.defineId(CarEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> CAR_ROLL =
             SynchedEntityData.defineId(CarEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<String> ATTACHED_PARTS =
+            SynchedEntityData.defineId(CarEntity.class, EntityDataSerializers.STRING);
 
 
     public CarEntity(EntityType<?> type, Level level) {
@@ -40,6 +42,7 @@ public class CarEntity extends Entity {
         this.entityData.define(BASE_NAME, "");
         this.entityData.define(CAR_PITCH, 0.0f);
         this.entityData.define(CAR_ROLL, 0.0f);
+        this.entityData.define(ATTACHED_PARTS, "");
 
         // ★ 新規追加：パーツグループ（クライアントでもすぐ取れるように）
         // 将来的にSynchedEntityDataで同期したい場合はここに追加
@@ -152,6 +155,39 @@ public class CarEntity extends Entity {
         if (this.level() != null) {
             refreshObbBoundingBox();
         }
+    }
+
+    public List<String> getAttachedParts() {
+        String raw = this.entityData.get(ATTACHED_PARTS);
+        if (raw == null || raw.isEmpty()) return List.of();
+        return List.of(raw.split(","));
+    }
+
+    public void setAttachedParts(List<String> parts) {
+        List<String> filtered = filterAttachedPartsForThisCar(parts);
+        String joined = filtered.isEmpty() ? "" : String.join(",", filtered);
+        this.entityData.set(ATTACHED_PARTS, joined);
+        if (this.level() != null && this.level().isClientSide()) {
+            invalidateRenderCache();
+        }
+    }
+
+    /**
+     * パーツの group が、この車の allowedPartGroups に含まれるものだけ残す。
+     * NBT /summon で書かれても、合わない名前は同期データに載せない。
+     */
+    public List<String> filterAttachedPartsForThisCar(List<String> parts) {
+        if (parts == null || parts.isEmpty()) return List.of();
+        List<String> allowed = getAllowedPartGroups();
+        List<String> out = new java.util.ArrayList<>();
+        for (String name : parts) {
+            if (name == null || name.isBlank()) continue;
+            String trimmed = name.trim();
+            if (com.hashiriyacarmod.parts.PartRegistry.matchesCarGroups(trimmed, allowed)) {
+                out.add(trimmed);
+            }
+        }
+        return out;
     }
 
     @OnlyIn(Dist.CLIENT)
@@ -336,6 +372,14 @@ public class CarEntity extends Entity {
         if (tag.contains("CarRoll")) {
             setCarRoll(tag.getFloat("CarRoll"));
         }
+        if (tag.contains("AttachedParts", CompoundTag.TAG_LIST)) {
+            List<String> list = new java.util.ArrayList<>();
+            var nbtList = tag.getList("AttachedParts", CompoundTag.TAG_STRING);
+            for (int i = 0; i < nbtList.size(); i++) {
+                list.add(nbtList.getString(i));
+            }
+            setAttachedParts(list);
+        }
     }
 
     @Override
@@ -343,6 +387,11 @@ public class CarEntity extends Entity {
         tag.putString("BaseName", getBaseName());
         tag.putFloat("CarPitch", getCarPitch());
         tag.putFloat("CarRoll", getCarRoll());
+        var list = new net.minecraft.nbt.ListTag();
+        for (String p : getAttachedParts()) {
+            list.add(net.minecraft.nbt.StringTag.valueOf(p));
+        }
+        tag.put("AttachedParts", list);
     }
 
     public CompoundTag getSaveData() {

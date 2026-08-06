@@ -183,8 +183,8 @@ public class CarPackLoader {
         String type = getJsonType(jsonFile);   // typeだけを先に軽く取得
 
         if ("parts".equalsIgnoreCase(type)) {
-            // partsはCarJsonParserを通さず直接登録
-            com.hashiriyacarmod.parts.PartRegistry.register(baseName, objFile);
+            // type判定のみ。中身は PartRegistry → PartJsonParser に任せる
+            com.hashiriyacarmod.parts.PartRegistry.register(baseName, objFile, jsonFile);
             LOGGER.info("[HashiriyaCarMod] Parts登録: {}", baseName);
             return;
         }
