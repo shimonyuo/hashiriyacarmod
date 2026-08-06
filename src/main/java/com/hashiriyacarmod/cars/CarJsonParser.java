@@ -26,6 +26,7 @@ public class CarJsonParser {
         String type = "cars";
         List<HitboxDefinition> hitboxes = new ArrayList<>();
         List<String> allowedPartGroups = new ArrayList<>();
+        List<CarJsonResult.PartPlacement> partPlacements = new ArrayList<>();
 
         try (FileReader reader = new FileReader(jsonFile)) {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
@@ -42,15 +43,46 @@ public class CarJsonParser {
                 JsonArray partsArray = root.getAsJsonArray("parts");
                 for (int i = 0; i < partsArray.size(); i++) {
                     JsonObject partObj = partsArray.get(i).getAsJsonObject();
+
+                    // po（位置）デフォルト 0,0,0
+                    Vec3 position = Vec3.ZERO;
+                    if (partObj.has("po")) {
+                        JsonArray po = partObj.getAsJsonArray("po");
+                        if (po.size() >= 3) {
+                            position = new Vec3(
+                                    po.get(0).getAsDouble(),
+                                    po.get(1).getAsDouble(),
+                                    po.get(2).getAsDouble()
+                            );
+                        }
+                    }
+
+                    // ro（回転）デフォルト 0,0,0
+                    float rotX = 0f, rotY = 0f, rotZ = 0f;
+                    if (partObj.has("ro")) {
+                        JsonArray ro = partObj.getAsJsonArray("ro");
+                        if (ro.size() >= 3) {
+                            rotX = ro.get(0).getAsFloat();
+                            rotY = ro.get(1).getAsFloat();
+                            rotZ = ro.get(2).getAsFloat();
+                        }
+                    }
+
+                    // group
+                    List<String> groups = new ArrayList<>();
                     if (partObj.has("group")) {
                         JsonArray groupArray = partObj.getAsJsonArray("group");
                         for (int j = 0; j < groupArray.size(); j++) {
                             String groupName = groupArray.get(j).getAsString();
-                            if (!allowedPartGroups.contains(groupName)) {   // 重複防止
+                            groups.add(groupName);
+                            if (!allowedPartGroups.contains(groupName)) {
                                 allowedPartGroups.add(groupName);
                             }
                         }
                     }
+
+                    // ★保存
+                    partPlacements.add(new CarJsonResult.PartPlacement(position, rotX, rotY, rotZ, groups));
                 }
             }
 
@@ -115,6 +147,6 @@ public class CarJsonParser {
             e.printStackTrace();
         }
 
-        return new CarJsonResult(displayName, width, height, type, hitboxes, allowedPartGroups);
+        return new CarJsonResult(displayName, width, height, type, hitboxes, allowedPartGroups, partPlacements);
     }
 }

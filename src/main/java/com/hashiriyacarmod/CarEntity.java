@@ -1,5 +1,6 @@
 package com.hashiriyacarmod;
 
+import com.hashiriyacarmod.cars.CarJsonResult;
 import com.hashiriyacarmod.parts.PartRegistry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -398,5 +399,36 @@ public class CarEntity extends Entity {
         CompoundTag tag = new CompoundTag();
         this.addAdditionalSaveData(tag);   // protectedメソッドは同じクラス内なので呼べる
         return tag;
+    }
+
+    public Vec3 getPartOffset(String attachedPartBaseName) {
+        // attachedPartBaseName の group を取得
+        List<String> partGroups = PartRegistry.getPartGroups(attachedPartBaseName);
+        AssetRegistry registry = CarPackLoader.getAssetRegistry(getBaseName());
+        if (registry == null || registry.partPlacements == null) return Vec3.ZERO;
+
+        for (CarJsonResult.PartPlacement p : registry.partPlacements) {
+            for (String g : partGroups) {
+                if (p.groups.contains(g)) {
+                    return p.position; // po
+                }
+            }
+        }
+        return Vec3.ZERO;
+    }
+
+    public float[] getPartRotation(String attachedPartBaseName) {
+        List<String> partGroups = PartRegistry.getPartGroups(attachedPartBaseName);
+        AssetRegistry registry = CarPackLoader.getAssetRegistry(getBaseName());
+        if (registry == null || registry.partPlacements == null) return new float[]{0, 0, 0};
+
+        for (CarJsonResult.PartPlacement p : registry.partPlacements) {
+            for (String g : partGroups) {
+                if (p.groups.contains(g)) {
+                    return new float[]{p.rotX, p.rotY, p.rotZ}; // ro
+                }
+            }
+        }
+        return new float[]{0, 0, 0};
     }
 }

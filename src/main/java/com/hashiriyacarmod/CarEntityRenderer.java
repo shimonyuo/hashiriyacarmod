@@ -80,7 +80,16 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
                 ObjMesh mesh = entry.getValue();
 
                 poseStack.pushPose();
-                // オフセットなし = 本体 0,0,0
+
+// 車JSONの parts[] から、このパーツgroup用の po / ro を取る
+                Vec3 po = entity.getPartOffset(attachedName);          // 例: (0, 0.773306, 2.26988)
+                float[] ro = entity.getPartRotation(attachedName);     // 例: [0,0,0]
+
+                poseStack.translate(po.x, po.y, po.z);
+                poseStack.mulPose(Axis.XP.rotationDegrees(ro[0]));
+                poseStack.mulPose(Axis.YP.rotationDegrees(ro[1]));
+                poseStack.mulPose(Axis.ZP.rotationDegrees(ro[2]));
+
                 Matrix4f partMatrix = new Matrix4f(poseStack.last().pose());
                 drawMeshOnGpu(entity, partName, mesh, partMatrix, texLoc, packedLight);
                 poseStack.popPose();

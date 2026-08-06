@@ -213,7 +213,14 @@ public class CarPackLoader {
 
         // cars専用処理
         Map<String, ObjMesh> meshParts = ObjLoader.loadWithParts(objFile);
-        AssetRegistry entry = new AssetRegistry(baseName, objFile, pngFile, meshParts, result.allowedPartGroups);
+        AssetRegistry entry = new AssetRegistry(
+                baseName,
+                objFile,
+                pngFile,
+                meshParts,
+                result.allowedPartGroups,
+                result.partPlacements
+        );
         assetRegistryMap.put(baseName, entry);
 
         // エンティティ登録
