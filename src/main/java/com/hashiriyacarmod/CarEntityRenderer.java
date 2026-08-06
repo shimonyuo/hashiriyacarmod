@@ -82,6 +82,8 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
             Map<String, ObjMesh> attachedMeshes = PartRegistry.getPartMeshes(attachedName);
             if (attachedMeshes == null || attachedMeshes.isEmpty()) continue;
 
+            ResourceLocation partTex = resolvePartTexture(attachedName, texLoc);
+
             for (var entry : attachedMeshes.entrySet()) {
                 String partName = attachedName + "/" + entry.getKey();
                 ObjMesh mesh = entry.getValue();
@@ -98,12 +100,28 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
                 poseStack.mulPose(Axis.ZP.rotationDegrees(ro[2]));
 
                 Matrix4f partMatrix = new Matrix4f(poseStack.last().pose());
-                drawMeshOnGpu(entity, partName, mesh, partMatrix, texLoc, packedLight);
+                drawMeshOnGpu(entity, partName, mesh, partMatrix, partTex, packedLight);
                 poseStack.popPose();
             }
         }
 
         poseStack.popPose();
+    }
+
+    private static ResourceLocation resolvePartTexture(String partBaseName, ResourceLocation fallback) {
+        String path = PartRegistry.getTexturePath(partBaseName);
+        if (path == null || path.isEmpty()) {
+            return fallback;
+        }
+        // "hashiriyacarmod:textures/..." 形式でも、"textures/..." だけでも可
+        if (path.contains(":")) {
+            return new ResourceLocation(path);
+        }
+        // 先頭の / を除去
+        if (path.startsWith("/")) {
+            path = path.substring(1);
+        }
+        return new ResourceLocation(HashiriyaCarMod.MOD_ID, path);
     }
 
     // 親Carからテクスチャを送り付ける安全策メソッド

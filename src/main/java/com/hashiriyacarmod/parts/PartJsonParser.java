@@ -35,6 +35,7 @@ public class PartJsonParser {
         String displayName = fallbackName;
         String type = "parts";
         List<String> groups = new ArrayList<>();
+        String texturePath = "";
 
         if (jsonFile == null || !jsonFile.exists()) {
             return PartJsonResult.empty(fallbackName);
@@ -67,13 +68,17 @@ public class PartJsonParser {
                 groups.addAll(readStringList(root.get("group")));
             }
 
+            if (root.has("texture_path") && root.get("texture_path").isJsonPrimitive()) {
+                texturePath = root.get("texture_path").getAsString().trim();
+            }
+
         } catch (Exception e) {
             LOGGER.warn("[PartJsonParser] 読み取り失敗: {} ({})",
                     jsonFile.getName(), e.toString());
             return PartJsonResult.empty(fallbackName);
         }
 
-        return new PartJsonResult(displayName, type, groups);
+        return new PartJsonResult(displayName, type, groups, texturePath);
     }
 
     private static List<String> readStringList(JsonElement element) {

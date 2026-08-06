@@ -26,14 +26,21 @@ public class PartRegistry {
     private static final Map<String, List<String>> partGroupMap = new LinkedHashMap<>();
 
     private static final Map<String, String> partDisplayNameMap = new LinkedHashMap<>();
+    /** baseName → 全体テクスチャパス（空 = 未指定） */
+    private static final Map<String, String> partTexturePathMap = new LinkedHashMap<>();
 
     /** 従来どおり（group なし） */
     public static void register(String baseName, File objFile) {
-        register(baseName, objFile, List.of());
+        register(baseName, objFile, List.of(), "");
     }
 
-    /** group 付き登録 */
+    /** group 付き登録（テクスチャパスなし） */
     public static void register(String baseName, File objFile, List<String> groups) {
+        register(baseName, objFile, groups, "");
+    }
+
+    /** group + 全体テクスチャパス付き登録 */
+    public static void register(String baseName, File objFile, List<String> groups, String texturePath) {
         if (objFile == null || !objFile.exists()) {
             LOGGER.warn("[PartRegistry] OBJが見つかりません: {}", baseName);
             return;
@@ -47,23 +54,26 @@ public class PartRegistry {
 
         partMeshMap.put(baseName, meshParts);
         partGroupMap.put(baseName, groups != null ? List.copyOf(groups) : List.of());
-        LOGGER.info("[PartRegistry] パーツ登録完了: {} ({} メッシュ, groups={})",
-                baseName, meshParts.size(), partGroupMap.get(baseName));
+        partTexturePathMap.put(baseName, texturePath != null ? texturePath.trim() : "");
+        LOGGER.info("[PartRegistry] パーツ登録完了: {} ({} メッシュ, groups={}, texture_path={})",
+                baseName, meshParts.size(), partGroupMap.get(baseName),
+                partTexturePathMap.get(baseName));
     }
 
-    /**
-     * JSONファイルも渡せる版。
-     * PartJsonParser で group 等を読み、メッシュと一緒に登録する。
-     */
     public static void register(String baseName, File objFile, File jsonFile) {
         PartJsonResult parsed = PartJsonParser.parse(jsonFile);
-        register(baseName, objFile, parsed.groups);
-        // ★ 追加：メニュー用表示名
+        register(baseName, objFile, parsed.groups, parsed.texturePath);
         String name = parsed.displayName;
         if (name == null || name.isEmpty()) {
             name = baseName;
         }
         partDisplayNameMap.put(baseName, name);
+    }
+
+    /** パーツ全体用テクスチャパス。未指定なら空文字 */
+    public static String getTexturePath(String baseName) {
+        String p = partTexturePathMap.get(baseName);
+        return p != null ? p : "";
     }
 
     public static Map<String, ObjMesh> getPartMeshes(String baseName) {
