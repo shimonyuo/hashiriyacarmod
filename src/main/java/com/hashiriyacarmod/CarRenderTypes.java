@@ -21,6 +21,8 @@ public class CarRenderTypes extends RenderStateShard {
     @javax.annotation.Nullable
     private static net.minecraft.client.renderer.ShaderInstance carEntityShader;
 
+    private static Boolean lastShadersEnabled = null;
+
     public static void setCarEntityShader(net.minecraft.client.renderer.ShaderInstance shader) {
         carEntityShader = shader;
     }
@@ -34,6 +36,19 @@ public class CarRenderTypes extends RenderStateShard {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public static boolean consumeShaderToggle() {
+        boolean now = isShadersEnabled();
+        if (lastShadersEnabled == null) {
+            lastShadersEnabled = now;
+            return false;
+        }
+        if (lastShadersEnabled == now) {
+            return false;
+        }
+        lastShadersEnabled = now;
+        return true;
     }
 
     private static final Function<ResourceLocation, RenderType> ENTITY_CUTOUT_TRIANGLES =

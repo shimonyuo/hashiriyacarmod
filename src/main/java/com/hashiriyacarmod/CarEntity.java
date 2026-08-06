@@ -168,11 +168,55 @@ public class CarEntity extends Entity {
         List<String> filtered = filterAttachedPartsForThisCar(parts);
         String joined = filtered.isEmpty() ? "" : String.join(",", filtered);
         this.entityData.set(ATTACHED_PARTS, joined);
-        if (this.level() != null && this.level().isClientSide()) {
-            invalidateRenderCache();
+        // クライアントは onSyncedDataUpdated でバッファ調整（サーバーでは何もしない）
+    }
+
+    public void setAttachedPartForGroup(String groupName, String partBaseName) {
+        if (groupName == null || groupName.isBlank()) return;
+
+        List<String> current = new java.util.ArrayList<>(getAttachedParts());
+
+        // この group に属する装着中パーツを外す
+        current.removeIf(name -> {
+            List<String> gs = PartRegistry.getPartGroups(name);
+            return gs.contains(groupName);
+        });
+
+        // NONE でなければ追加（車の許可 group ＋ パーツ側 group は filter で再確認）
+        if (partBaseName != null && !partBaseName.isBlank()
+                && !"NONE".equalsIgnoreCase(partBaseName)) {
+            current.add(partBaseName.trim());
+        }
+
+        setAttachedParts(current);
+    }
+
+    @Override
+    public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
+        super.onSyncedDataUpdated(key);
+        if (ATTACHED_PARTS.equals(key) && this.level() != null && this.level().isClientSide()) {
+            // 装着構成が変わったときだけクライアント描画を更新（全員の画面が揃う）
+            invalidateAttachedPartBuffersOnly();
         }
     }
 
+    /** 車本体VBOは残し、装着パーツのバッファだけ捨てる（OBJ再読込なし） */
+    @OnlyIn(Dist.CLIENT)
+    private void invalidateAttachedPartBuffersOnly() {
+        if (clientData == null) return;
+        java.util.Iterator<Map.Entry<String, StandardVboCache>> it =
+                clientData.partBuffers.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, StandardVboCache> e = it.next();
+            // 装着パーツは "baseName/objPart" 形式でキーにしている
+            if (e.getKey().contains("/")) {
+                e.getValue().close();
+                it.remove();
+                clientData.lastLight.remove(e.getKey());
+                clientData.lastColor.remove(e.getKey());
+            }
+        }
+    }
     /**
      * パーツの group が、この車の allowedPartGroups に含まれるものだけ残す。
      * NBT /summon で書かれても、合わない名前は同期データに載せない。
@@ -358,6 +402,11 @@ public class CarEntity extends Entity {
             }
         }
         clientData = null;
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    public void reloadObjDrawing() {
+        invalidateRenderCache();
     }
 
     // ==================== データ保存 ====================

@@ -17,6 +17,10 @@ public class ModNetworking {
             PROTOCOL_VERSION::equals
     );
 
+    public static void sendToServer(Object packet) {
+        INSTANCE.sendToServer(packet);
+    }
+
     public static void register() {
         int id = 0;
 
@@ -27,6 +31,13 @@ public class ModNetworking {
                 CarWrenchDataPacket::decode,
                 CarWrenchDataPacket::handle
                 // NetworkDirectionは第6引数でOptionalで渡す必要があるバージョンもあるため省略
+        );
+        INSTANCE.registerMessage(
+                id++,
+                SetAttachedPartPacket.class,
+                SetAttachedPartPacket::encode,
+                SetAttachedPartPacket::decode,
+                SetAttachedPartPacket::handle
         );
     }
 

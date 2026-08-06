@@ -31,10 +31,17 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
 
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
+
+        // シェーダー on/off が切り替わったら、車の描画キャッシュだけ組み直す
+        if (CarRenderTypes.consumeShaderToggle()) {
+            for (CarEntity car : CarEntityRegistry.getAllInLevel(entity.level())) {
+                car.reloadObjDrawing();
+            }
+        }
+
         renderHitboxLines(entity, entityYaw, poseStack, bufferSource);
 
         if (!entity.resolveRenderCache()) return;
-
         var parts = entity.getCachedParts();
         if (parts.isEmpty()) {
             parts = entity.getPartMeshes();
