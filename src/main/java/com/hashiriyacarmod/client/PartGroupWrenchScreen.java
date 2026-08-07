@@ -119,7 +119,7 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
                 this.leftPos + IMAGE_WIDTH, this.topPos + IMAGE_HEIGHT,
                 0x80000000);
 
-        Component title = Component.literal("Parts");
+        Component title = Component.literal("Parts setting");
         int titleX = this.leftPos + (IMAGE_WIDTH - this.font.width(title)) / 2;
         int titleY = this.topPos + 8;
         guiGraphics.drawString(this.font, title, titleX, titleY, 0xFFFFFF);

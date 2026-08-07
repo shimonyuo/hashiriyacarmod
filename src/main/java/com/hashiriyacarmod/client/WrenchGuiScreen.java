@@ -52,18 +52,15 @@ public class WrenchGuiScreen extends Screen {
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
 
-        // ── ウィンドウの背景 ──
         guiGraphics.fill(this.leftPos, this.topPos,
                 this.leftPos + IMAGE_WIDTH, this.topPos + IMAGE_HEIGHT,
                 0x80000000);
 
-        // ── タイトル（Parts） ──
         Component title = Component.literal("Vehicle");
         int titleX = this.leftPos + (IMAGE_WIDTH - this.font.width(title)) / 2;
         int titleY = this.topPos + 8;
         guiGraphics.drawString(this.font, title, titleX, titleY, 0xFFFFFF);
 
-        // ── testボタン ──
         Component testText = Component.literal("Parts");
         int textWidth = this.font.width(testText);
         int textHeight = this.font.lineHeight;
@@ -76,9 +73,17 @@ public class WrenchGuiScreen extends Screen {
         int textColor = hoveringTest ? 0xFFFFFF : 0xCCCCCC;
         guiGraphics.drawString(this.font, testText, textX, textY, textColor);
 
-        // ← ここに今後、他のパーツボタンなどを追加できます
+        Component colorsText = Component.literal("Colors");
+        int colorsWidth = this.font.width(colorsText);
+        int colorsHeight = this.font.lineHeight;
+        int colorsX = this.leftPos + (IMAGE_WIDTH - colorsWidth) / 2;
+        int colorsY = textY + textHeight + 6;
 
-        // super.render()は呼ばない(親のWrenchGuiScreenの描画が重複するため)
+        boolean hoveringColors = mouseX >= colorsX && mouseX <= colorsX + colorsWidth
+                && mouseY >= colorsY && mouseY <= colorsY + colorsHeight;
+
+        int colorsColor = hoveringColors ? 0xFFFFFF : 0xCCCCCC;
+        guiGraphics.drawString(this.font, colorsText, colorsX, colorsY, colorsColor);
     }
 
     @Override
@@ -94,8 +99,26 @@ public class WrenchGuiScreen extends Screen {
                 && mouseY >= textY && mouseY <= textY + textHeight;
 
         if (clickedOnParts) {
-            // ── Partsページに遷移します ──
             Minecraft.getInstance().setScreen(new PartsWrenchScreen(this));
+            return true;
+        }
+
+        Component colorsText = Component.literal("Colors");
+        int colorsWidth = this.font.width(colorsText);
+        int colorsHeight = this.font.lineHeight;
+        int colorsX = this.leftPos + (IMAGE_WIDTH - colorsWidth) / 2;
+        int colorsY = textY + textHeight + 6;
+
+        boolean clickedOnColors = mouseX >= colorsX && mouseX <= colorsX + colorsWidth
+                && mouseY >= colorsY && mouseY <= colorsY + colorsHeight;
+
+        if (clickedOnColors) {
+            if (Minecraft.getInstance().player != null) {
+                Minecraft.getInstance().player.displayClientMessage(
+                        Component.literal("§eColors (準備中)"),
+                        false
+                );
+            }
             return true;
         }
 
