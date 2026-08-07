@@ -51,10 +51,6 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
         this.marqueeStartMs = System.currentTimeMillis();
     }
 
-    /**
-     * この group に何か付いていればその baseName の index。
-     * 何も無ければ 0（NONE = 未装着）。
-     */
     private int findInitialIndexFromNbt() {
         net.minecraft.nbt.CompoundTag nbt = WrenchGuiScreen.lastReceivedNbt;
         if (nbt == null || !nbt.contains("AttachedParts", net.minecraft.nbt.Tag.TAG_LIST)) {
@@ -63,24 +59,30 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
 
         var list = nbt.getList("AttachedParts", net.minecraft.nbt.Tag.TAG_STRING);
         for (int i = 0; i < list.size(); i++) {
-            String attached = list.getString(i);
-            if (attached == null || attached.isBlank()) continue;
+            String token = list.getString(i);
+            if (token == null || token.isBlank()) continue;
 
-            // この group に属する装着パーツか
-            List<String> groups = PartRegistry.getPartGroups(attached);
-            if (!groups.contains(this.groupName)) continue;
+            String base = com.hashiriyacarmod.CarEntity.attachedBaseName(token);
+            String seat = com.hashiriyacarmod.CarEntity.attachedSeatGroup(token);
 
-            // アロー一覧の何番目か
+            boolean belongsToThisSeat;
+            if (!seat.isEmpty()) {
+                // 新形式 base>group
+                belongsToThisSeat = seat.equals(this.groupName);
+            } else {
+                // 旧形式 base のみ
+                belongsToThisSeat = PartRegistry.getPartGroups(base).contains(this.groupName);
+            }
+            if (!belongsToThisSeat) continue;
+
             for (int idx = 1; idx < baseNames.size(); idx++) {
-                if (attached.equals(baseNames.get(idx))) {
+                if (base.equals(baseNames.get(idx))) {
                     return idx;
                 }
             }
         }
-        // この group には何も付いていない → NONE
-        return 0;
+        return 0; // NONE
     }
-
     private void applyAttachedPartToLocalNbt(String group, String partBaseName) {
         if (WrenchGuiScreen.lastReceivedNbt == null) {
             WrenchGuiScreen.lastReceivedNbt = new net.minecraft.nbt.CompoundTag();
@@ -91,19 +93,31 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
         if (nbt.contains("AttachedParts", net.minecraft.nbt.Tag.TAG_LIST)) {
             var list = nbt.getList("AttachedParts", net.minecraft.nbt.Tag.TAG_STRING);
             for (int i = 0; i < list.size(); i++) {
-                String name = list.getString(i);
-                if (name == null || name.isBlank()) continue;
-                // この group に属するものは一旦外す
-                if (PartRegistry.getPartGroups(name).contains(group)) {
-                    continue;
+                String token = list.getString(i);
+                if (token == null || token.isBlank()) continue;
+
+                String base = com.hashiriyacarmod.CarEntity.attachedBaseName(token);
+                String seat = com.hashiriyacarmod.CarEntity.attachedSeatGroup(token);
+
+                // この座 group の装着は外す
+                if (!seat.isEmpty()) {
+                    if (seat.equals(group)) continue;
+                } else {
+                    if (PartRegistry.getPartGroups(base).contains(group)) continue;
                 }
-                attached.add(name);
+                attached.add(token);
             }
         }
 
         if (partBaseName != null && !partBaseName.isBlank()
                 && !"NONE".equalsIgnoreCase(partBaseName)) {
-            attached.add(partBaseName.trim());
+            String base = partBaseName.trim();
+            List<String> partGroups = PartRegistry.getPartGroups(base);
+            if (partGroups.size() <= 1) {
+                attached.add(base);
+            } else {
+                attached.add(base + ">" + group.trim());
+            }
         }
 
         net.minecraft.nbt.ListTag newList = new net.minecraft.nbt.ListTag();

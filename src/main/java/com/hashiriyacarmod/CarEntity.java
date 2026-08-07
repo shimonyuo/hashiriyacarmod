@@ -158,6 +158,22 @@ public class CarEntity extends Entity {
         }
     }
 
+    public static String[] splitAttachedToken(String token) {
+        if (token == null) return new String[]{"", ""};
+        String t = token.trim();
+        int i = t.indexOf('>');
+        if (i < 0) return new String[]{t, ""};
+        return new String[]{t.substring(0, i).trim(), t.substring(i + 1).trim()};
+    }
+
+    public static String attachedBaseName(String token) {
+        return splitAttachedToken(token)[0];
+    }
+
+    public static String attachedSeatGroup(String token) {
+        return splitAttachedToken(token)[1];
+    }
+
     public List<String> getAttachedParts() {
         String raw = this.entityData.get(ATTACHED_PARTS);
         if (raw == null || raw.isEmpty()) return List.of();
@@ -176,16 +192,29 @@ public class CarEntity extends Entity {
 
         List<String> current = new java.util.ArrayList<>(getAttachedParts());
 
-        // この group に属する装着中パーツを外す
-        current.removeIf(name -> {
-            List<String> gs = PartRegistry.getPartGroups(name);
+        // この座 group に付いている装着を外す（>group 形式と、旧形式の両方）
+        current.removeIf(token -> {
+            String seat = attachedSeatGroup(token);
+            if (!seat.isEmpty()) {
+                return seat.equals(groupName);
+            }
+            // 旧形式: baseName のみ → パーツが持つ group で判定
+            List<String> gs = PartRegistry.getPartGroups(attachedBaseName(token));
             return gs.contains(groupName);
         });
 
-        // NONE でなければ追加（車の許可 group ＋ パーツ側 group は filter で再確認）
         if (partBaseName != null && !partBaseName.isBlank()
                 && !"NONE".equalsIgnoreCase(partBaseName)) {
-            current.add(partBaseName.trim());
+            String base = partBaseName.trim();
+            // 常に base>group で保存（座を一意に特定）
+            List<String> partGroups = PartRegistry.getPartGroups(base);
+            if (partGroups.size() <= 1) {
+                // group が1つ（または未定義）→ 短縮形
+                current.add(base);
+            } else {
+                // 複数 group → 座を指定
+                current.add(base + ">" + groupName.trim());
+            }
         }
 
         setAttachedParts(current);
@@ -225,11 +254,27 @@ public class CarEntity extends Entity {
         if (parts == null || parts.isEmpty()) return List.of();
         List<String> allowed = getAllowedPartGroups();
         List<String> out = new java.util.ArrayList<>();
-        for (String name : parts) {
-            if (name == null || name.isBlank()) continue;
-            String trimmed = name.trim();
-            if (com.hashiriyacarmod.parts.PartRegistry.matchesCarGroups(trimmed, allowed)) {
-                out.add(trimmed);
+
+        for (String raw : parts) {
+            if (raw == null || raw.isBlank()) continue;
+            String token = raw.trim();
+            String base = attachedBaseName(token);
+            String seat = attachedSeatGroup(token);
+            if (base.isEmpty()) continue;
+
+            List<String> partGroups = PartRegistry.getPartGroups(base);
+            if (partGroups.isEmpty()) continue;
+
+            if (!seat.isEmpty()) {
+                // base>group : パーツがその group を持ち、車も許可している
+                if (partGroups.contains(seat) && allowed.contains(seat)) {
+                    out.add(base + ">" + seat);
+                }
+            } else {
+                // 旧形式 base のみ
+                if (PartRegistry.matchesCarGroups(base, allowed)) {
+                    out.add(base);
+                }
             }
         }
         return out;
@@ -450,31 +495,55 @@ public class CarEntity extends Entity {
         return tag;
     }
 
-    public Vec3 getPartOffset(String attachedPartBaseName) {
-        // attachedPartBaseName の group を取得
-        List<String> partGroups = PartRegistry.getPartGroups(attachedPartBaseName);
+    public Vec3 getPartOffset(String attachedToken) {
+        String base = attachedBaseName(attachedToken);
+        String seat = attachedSeatGroup(attachedToken);
+
         AssetRegistry registry = CarPackLoader.getAssetRegistry(getBaseName());
         if (registry == null || registry.partPlacements == null) return Vec3.ZERO;
 
+        if (!seat.isEmpty()) {
+            for (CarJsonResult.PartPlacement p : registry.partPlacements) {
+                if (p.groups.contains(seat)) {
+                    return p.position;
+                }
+            }
+            return Vec3.ZERO;
+        }
+
+        // 旧形式: パーツの group で最初の一致
+        List<String> partGroups = PartRegistry.getPartGroups(base);
         for (CarJsonResult.PartPlacement p : registry.partPlacements) {
             for (String g : partGroups) {
                 if (p.groups.contains(g)) {
-                    return p.position; // po
+                    return p.position;
                 }
             }
         }
         return Vec3.ZERO;
     }
 
-    public float[] getPartRotation(String attachedPartBaseName) {
-        List<String> partGroups = PartRegistry.getPartGroups(attachedPartBaseName);
+    public float[] getPartRotation(String attachedToken) {
+        String base = attachedBaseName(attachedToken);
+        String seat = attachedSeatGroup(attachedToken);
+
         AssetRegistry registry = CarPackLoader.getAssetRegistry(getBaseName());
         if (registry == null || registry.partPlacements == null) return new float[]{0, 0, 0};
 
+        if (!seat.isEmpty()) {
+            for (CarJsonResult.PartPlacement p : registry.partPlacements) {
+                if (p.groups.contains(seat)) {
+                    return new float[]{p.rotX, p.rotY, p.rotZ};
+                }
+            }
+            return new float[]{0, 0, 0};
+        }
+
+        List<String> partGroups = PartRegistry.getPartGroups(base);
         for (CarJsonResult.PartPlacement p : registry.partPlacements) {
             for (String g : partGroups) {
                 if (p.groups.contains(g)) {
-                    return new float[]{p.rotX, p.rotY, p.rotZ}; // ro
+                    return new float[]{p.rotX, p.rotY, p.rotZ};
                 }
             }
         }

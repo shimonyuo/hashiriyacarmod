@@ -73,26 +73,36 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
             drawMeshOnGpu(entity, partName, mesh, partMatrix, texLoc, packedLight);
             poseStack.popPose();
         }
-        for (String attachedName : entity.getAttachedParts()) {
-            // 本体 cars に同じ group が無ければ OBJ を描かない
-            if (!PartRegistry.matchesCarGroups(attachedName, entity.getAllowedPartGroups())) {
-                continue;
+        for (String attachedToken : entity.getAttachedParts()) {
+            String attachedBase = CarEntity.attachedBaseName(attachedToken);
+            String seatGroup = CarEntity.attachedSeatGroup(attachedToken);
+
+            if (attachedBase.isEmpty()) continue;
+
+            if (!seatGroup.isEmpty()) {
+                // base>group : 指定座が車に許可されているか
+                if (!entity.getAllowedPartGroups().contains(seatGroup)) continue;
+                if (!PartRegistry.getPartGroups(attachedBase).contains(seatGroup)) continue;
+            } else {
+                if (!PartRegistry.matchesCarGroups(attachedBase, entity.getAllowedPartGroups())) {
+                    continue;
+                }
             }
 
-            Map<String, ObjMesh> attachedMeshes = PartRegistry.getPartMeshes(attachedName);
+            Map<String, ObjMesh> attachedMeshes = PartRegistry.getPartMeshes(attachedBase);
             if (attachedMeshes == null || attachedMeshes.isEmpty()) continue;
 
-            ResourceLocation partTex = resolvePartTexture(attachedName, texLoc);
+            ResourceLocation partTex = resolvePartTexture(attachedBase, texLoc);
 
             for (var entry : attachedMeshes.entrySet()) {
-                String partName = attachedName + "/" + entry.getKey();
+                // VBOキーは token 込みにして座ちがいを別キャッシュに
+                String partName = attachedToken + "/" + entry.getKey();
                 ObjMesh mesh = entry.getValue();
 
                 poseStack.pushPose();
 
-// 車JSONの parts[] から、このパーツgroup用の po / ro を取る
-                Vec3 po = entity.getPartOffset(attachedName);          // 例: (0, 0.773306, 2.26988)
-                float[] ro = entity.getPartRotation(attachedName);     // 例: [0,0,0]
+                Vec3 po = entity.getPartOffset(attachedToken);
+                float[] ro = entity.getPartRotation(attachedToken);
 
                 poseStack.translate(po.x, po.y, po.z);
                 poseStack.mulPose(Axis.XP.rotationDegrees(ro[0]));
