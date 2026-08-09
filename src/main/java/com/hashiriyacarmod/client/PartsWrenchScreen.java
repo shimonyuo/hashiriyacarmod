@@ -44,6 +44,8 @@ public class PartsWrenchScreen extends WrenchGuiScreen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        guiGraphics.fill(0, 0, this.width, this.height, 0x80000000);
+
         guiGraphics.fill(this.leftPos, this.topPos,
                 this.leftPos + IMAGE_WIDTH, this.topPos + IMAGE_HEIGHT,
                 0x80000000);
