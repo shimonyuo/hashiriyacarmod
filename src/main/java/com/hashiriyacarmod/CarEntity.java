@@ -467,11 +467,15 @@ public class CarEntity extends Entity {
         if (tag.contains("CarRoll")) {
             setCarRoll(tag.getFloat("CarRoll"));
         }
-        if (tag.contains("AttachedParts", CompoundTag.TAG_LIST)) {
+
+        // AttachedParts:{ae86frontaero1:{}, ...}
+        if (tag.contains("AttachedParts", CompoundTag.TAG_COMPOUND)) {
+            CompoundTag compound = tag.getCompound("AttachedParts");
             List<String> list = new java.util.ArrayList<>();
-            var nbtList = tag.getList("AttachedParts", CompoundTag.TAG_STRING);
-            for (int i = 0; i < nbtList.size(); i++) {
-                list.add(nbtList.getString(i));
+            for (String key : compound.getAllKeys()) {
+                if (key != null && !key.isBlank()) {
+                    list.add(key.trim());
+                }
             }
             setAttachedParts(list);
         }
@@ -482,11 +486,13 @@ public class CarEntity extends Entity {
         tag.putString("BaseName", getBaseName());
         tag.putFloat("CarPitch", getCarPitch());
         tag.putFloat("CarRoll", getCarRoll());
-        var list = new net.minecraft.nbt.ListTag();
+        CompoundTag attached = new CompoundTag();
         for (String p : getAttachedParts()) {
-            list.add(net.minecraft.nbt.StringTag.valueOf(p));
+            if (p == null || p.isBlank()) continue;
+            // 子はとりあえず空の {}（ネストは後で）
+            attached.put(p.trim(), new CompoundTag());
         }
-        tag.put("AttachedParts", list);
+        tag.put("AttachedParts", attached);
     }
 
     public CompoundTag getSaveData() {

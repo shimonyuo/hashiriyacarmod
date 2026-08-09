@@ -23,7 +23,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -265,10 +264,9 @@ public class CarObjScreen {
         try {
             drawParts(poseStack, registry.parts, texLoc);
 
-            if (nbt.contains("AttachedParts", Tag.TAG_LIST)) {
-                ListTag list = nbt.getList("AttachedParts", Tag.TAG_STRING);
-                for (int i = 0; i < list.size(); i++) {
-                    String token = list.getString(i);
+            if (nbt.contains("AttachedParts", Tag.TAG_COMPOUND)) {
+                CompoundTag attached = nbt.getCompound("AttachedParts");
+                for (String token : attached.getAllKeys()) {
                     if (token == null || token.isBlank()) continue;
 
                     String attachedBase = CarEntity.attachedBaseName(token);

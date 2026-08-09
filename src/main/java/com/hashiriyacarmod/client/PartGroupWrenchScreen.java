@@ -53,13 +53,12 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
 
     private int findInitialIndexFromNbt() {
         net.minecraft.nbt.CompoundTag nbt = WrenchGuiScreen.lastReceivedNbt;
-        if (nbt == null || !nbt.contains("AttachedParts", net.minecraft.nbt.Tag.TAG_LIST)) {
+        if (nbt == null || !nbt.contains("AttachedParts", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
             return 0;
         }
 
-        var list = nbt.getList("AttachedParts", net.minecraft.nbt.Tag.TAG_STRING);
-        for (int i = 0; i < list.size(); i++) {
-            String token = list.getString(i);
+        net.minecraft.nbt.CompoundTag attached = nbt.getCompound("AttachedParts");
+        for (String token : attached.getAllKeys()) {
             if (token == null || token.isBlank()) continue;
 
             String base = com.hashiriyacarmod.CarEntity.attachedBaseName(token);
@@ -67,10 +66,8 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
 
             boolean belongsToThisSeat;
             if (!seat.isEmpty()) {
-                // 新形式 base>group
                 belongsToThisSeat = seat.equals(this.groupName);
             } else {
-                // 旧形式 base のみ
                 belongsToThisSeat = PartRegistry.getPartGroups(base).contains(this.groupName);
             }
             if (!belongsToThisSeat) continue;
@@ -81,7 +78,7 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
                 }
             }
         }
-        return 0; // NONE
+        return 0;
     }
     private void applyAttachedPartToLocalNbt(String group, String partBaseName) {
         if (WrenchGuiScreen.lastReceivedNbt == null) {
@@ -89,11 +86,11 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
         }
         net.minecraft.nbt.CompoundTag nbt = WrenchGuiScreen.lastReceivedNbt;
 
-        java.util.List<String> attached = new java.util.ArrayList<>();
-        if (nbt.contains("AttachedParts", net.minecraft.nbt.Tag.TAG_LIST)) {
-            var list = nbt.getList("AttachedParts", net.minecraft.nbt.Tag.TAG_STRING);
-            for (int i = 0; i < list.size(); i++) {
-                String token = list.getString(i);
+        net.minecraft.nbt.CompoundTag attached = new net.minecraft.nbt.CompoundTag();
+
+        if (nbt.contains("AttachedParts", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+            net.minecraft.nbt.CompoundTag old = nbt.getCompound("AttachedParts");
+            for (String token : old.getAllKeys()) {
                 if (token == null || token.isBlank()) continue;
 
                 String base = com.hashiriyacarmod.CarEntity.attachedBaseName(token);
@@ -105,7 +102,9 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
                 } else {
                     if (PartRegistry.getPartGroups(base).contains(group)) continue;
                 }
-                attached.add(token);
+
+                // 子は空の {} のままコピー（ネストは後で）
+                attached.put(token, old.getCompound(token).copy());
             }
         }
 
@@ -113,18 +112,16 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
                 && !"NONE".equalsIgnoreCase(partBaseName)) {
             String base = partBaseName.trim();
             List<String> partGroups = PartRegistry.getPartGroups(base);
+            String token;
             if (partGroups.size() <= 1) {
-                attached.add(base);
+                token = base;
             } else {
-                attached.add(base + ">" + group.trim());
+                token = base + ">" + group.trim();
             }
+            attached.put(token, new net.minecraft.nbt.CompoundTag());
         }
 
-        net.minecraft.nbt.ListTag newList = new net.minecraft.nbt.ListTag();
-        for (String p : attached) {
-            newList.add(net.minecraft.nbt.StringTag.valueOf(p));
-        }
-        nbt.put("AttachedParts", newList);
+        nbt.put("AttachedParts", attached);
     }
 
     @Override
