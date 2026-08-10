@@ -16,7 +16,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import org.joml.Matrix4f;
-
+import net.minecraft.nbt.CompoundTag;
 import java.util.Map;
 
 @OnlyIn(Dist.CLIENT)
@@ -73,49 +73,91 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
             drawMeshOnGpu(entity, partName, mesh, partMatrix, texLoc, packedLight);
             poseStack.popPose();
         }
-        for (String attachedToken : entity.getAttachedParts()) {
-            String attachedBase = CarEntity.attachedBaseName(attachedToken);
-            String seatGroup = CarEntity.attachedSeatGroup(attachedToken);
+        renderAttachedRecursive(
+                entity,
+                entity.getAttachedPartsTree(),
+                null,
+                "",
+                poseStack,
+                texLoc,
+                packedLight
+        );
 
+        poseStack.popPose();
+    }
+
+    private void renderAttachedRecursive(
+            CarEntity entity,
+            CompoundTag tree,
+            String parentPartBase,
+            String pathPrefix,
+            PoseStack poseStack,
+            ResourceLocation fallbackTex,
+            int packedLight) {
+
+        if (tree == null || tree.isEmpty()) return;
+
+        for (String token : tree.getAllKeys()) {
+            if (token == null || token.isBlank()) continue;
+
+            String attachedBase = CarEntity.attachedBaseName(token);
+            String seatGroup = CarEntity.attachedSeatGroup(token);
             if (attachedBase.isEmpty()) continue;
 
+            java.util.List<String> allowed =
+                    (parentPartBase == null || parentPartBase.isEmpty())
+                            ? entity.getAllowedPartGroups()
+                            : PartRegistry.getAllowedChildGroups(parentPartBase);
+
+            java.util.List<String> partGroups = PartRegistry.getPartGroups(attachedBase);
+            if (partGroups.isEmpty()) continue;
+
+            boolean ok;
             if (!seatGroup.isEmpty()) {
-                // base>group : 指定座が車に許可されているか
-                if (!entity.getAllowedPartGroups().contains(seatGroup)) continue;
-                if (!PartRegistry.getPartGroups(attachedBase).contains(seatGroup)) continue;
+                ok = partGroups.contains(seatGroup) && allowed.contains(seatGroup);
             } else {
-                if (!PartRegistry.matchesCarGroups(attachedBase, entity.getAllowedPartGroups())) {
-                    continue;
+                ok = false;
+                for (String g : partGroups) {
+                    if (allowed.contains(g)) {
+                        ok = true;
+                        break;
+                    }
                 }
             }
+            if (!ok) continue;
 
             Map<String, ObjMesh> attachedMeshes = PartRegistry.getPartMeshes(attachedBase);
             if (attachedMeshes == null || attachedMeshes.isEmpty()) continue;
 
-            ResourceLocation partTex = resolvePartTexture(attachedBase, texLoc);
+            ResourceLocation partTex = resolvePartTexture(attachedBase, fallbackTex);
+            Vec3 po = entity.getPartOffset(parentPartBase, token);
+            float[] ro = entity.getPartRotation(parentPartBase, token);
 
+            poseStack.pushPose();
+            poseStack.translate(po.x, po.y, po.z);
+            poseStack.mulPose(Axis.XP.rotationDegrees(ro[0]));
+            poseStack.mulPose(Axis.YP.rotationDegrees(ro[1]));
+            poseStack.mulPose(Axis.ZP.rotationDegrees(ro[2]));
+
+            String path = pathPrefix.isEmpty() ? token : pathPrefix + "/" + token;
             for (var entry : attachedMeshes.entrySet()) {
-                // VBOキーは token 込みにして座ちがいを別キャッシュに
-                String partName = attachedToken + "/" + entry.getKey();
-                ObjMesh mesh = entry.getValue();
-
-                poseStack.pushPose();
-
-                Vec3 po = entity.getPartOffset(attachedToken);
-                float[] ro = entity.getPartRotation(attachedToken);
-
-                poseStack.translate(po.x, po.y, po.z);
-                poseStack.mulPose(Axis.XP.rotationDegrees(ro[0]));
-                poseStack.mulPose(Axis.YP.rotationDegrees(ro[1]));
-                poseStack.mulPose(Axis.ZP.rotationDegrees(ro[2]));
-
+                String partName = path + "/" + entry.getKey();
                 Matrix4f partMatrix = new Matrix4f(poseStack.last().pose());
-                drawMeshOnGpu(entity, partName, mesh, partMatrix, partTex, packedLight);
-                poseStack.popPose();
+                drawMeshOnGpu(entity, partName, entry.getValue(), partMatrix, partTex, packedLight);
             }
-        }
 
-        poseStack.popPose();
+            renderAttachedRecursive(
+                    entity,
+                    tree.getCompound(token),
+                    attachedBase,
+                    path,
+                    poseStack,
+                    fallbackTex,
+                    packedLight
+            );
+
+            poseStack.popPose();
+        }
     }
 
     private static ResourceLocation resolvePartTexture(String partBaseName, ResourceLocation fallback) {

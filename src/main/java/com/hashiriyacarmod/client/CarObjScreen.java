@@ -128,6 +128,30 @@ public class CarObjScreen {
         } finally {
             g.disableScissor();
         }
+
+        double mouseX = event.getMouseX();
+        double mouseY = event.getMouseY();
+
+        long window = mc.getWindow().getWindow();
+        boolean leftDown = GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
+        boolean rightDown = GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
+
+        boolean inside = mouseX >= clipLeft && mouseX < clipRight
+                && mouseY >= clipTop && mouseY < clipBottom;
+
+        if (inside && !leftDown && !rightDown) {
+            g.renderTooltip(
+                    mc.font,
+                    java.util.List.of(
+                            net.minecraft.network.chat.Component.literal("Right-click drag: OBJ rotate"),
+                            net.minecraft.network.chat.Component.literal("Left-click drag: OBJ move"),
+                            net.minecraft.network.chat.Component.literal("Mouse-wheel scroll: Zoom in/out")
+                    ),
+                    java.util.Optional.empty(),
+                    (int) mouseX,
+                    (int) mouseY
+            );
+        }
     }
 
     private static void updateViewFromLeftDrag(Minecraft mc,
@@ -265,37 +289,96 @@ public class CarObjScreen {
             drawParts(poseStack, registry.parts, texLoc);
 
             if (nbt.contains("AttachedParts", Tag.TAG_COMPOUND)) {
-                CompoundTag attached = nbt.getCompound("AttachedParts");
-                for (String token : attached.getAllKeys()) {
-                    if (token == null || token.isBlank()) continue;
-
-                    String attachedBase = CarEntity.attachedBaseName(token);
-                    String seatGroup = CarEntity.attachedSeatGroup(token);
-                    if (attachedBase.isEmpty()) continue;
-
-                    Map<String, ObjMesh> attachedMeshes = PartRegistry.getPartMeshes(attachedBase);
-                    if (attachedMeshes == null || attachedMeshes.isEmpty()) continue;
-
-                    ResourceLocation partTex = resolvePartTexture(attachedBase, texLoc);
-
-                    Vec3 po = resolvePartOffset(registry, attachedBase, seatGroup);
-                    float[] ro = resolvePartRotation(registry, attachedBase, seatGroup);
-
-                    poseStack.pushPose();
-                    poseStack.translate(po.x, po.y, po.z);
-                    poseStack.mulPose(Axis.XP.rotationDegrees(ro[0]));
-                    poseStack.mulPose(Axis.YP.rotationDegrees(ro[1]));
-                    poseStack.mulPose(Axis.ZP.rotationDegrees(ro[2]));
-
-                    drawParts(poseStack, attachedMeshes, partTex);
-                    poseStack.popPose();
-                }
+                drawAttachedTree(
+                        poseStack,
+                        nbt.getCompound("AttachedParts"),
+                        registry,
+                        null,   // 親パーツなし = 車の parts[]
+                        texLoc
+                );
             }
         } finally {
             RenderSystem.disableDepthTest();
             Lighting.setupFor3DItems();
             poseStack.popPose();
         }
+    }
+
+    private static void drawAttachedTree(
+            PoseStack poseStack,
+            CompoundTag tree,
+            AssetRegistry carRegistry,
+            String parentPartBase,
+            ResourceLocation fallbackTex) {
+
+        if (tree == null || tree.isEmpty()) return;
+
+        for (String token : tree.getAllKeys()) {
+            if (token == null || token.isBlank()) continue;
+
+            String attachedBase = CarEntity.attachedBaseName(token);
+            String seatGroup = CarEntity.attachedSeatGroup(token);
+            if (attachedBase.isEmpty()) continue;
+
+            Map<String, ObjMesh> meshes = PartRegistry.getPartMeshes(attachedBase);
+            if (meshes == null || meshes.isEmpty()) continue;
+
+            Vec3 po;
+            float[] ro;
+            if (parentPartBase == null || parentPartBase.isEmpty()) {
+                po = resolvePartOffset(carRegistry, attachedBase, seatGroup);
+                ro = resolvePartRotation(carRegistry, attachedBase, seatGroup);
+            } else {
+                po = resolveChildPartOffset(parentPartBase, attachedBase, seatGroup);
+                ro = resolveChildPartRotation(parentPartBase, attachedBase, seatGroup);
+            }
+
+            ResourceLocation partTex = resolvePartTexture(attachedBase, fallbackTex);
+
+            poseStack.pushPose();
+            poseStack.translate(po.x, po.y, po.z);
+            poseStack.mulPose(Axis.XP.rotationDegrees(ro[0]));
+            poseStack.mulPose(Axis.YP.rotationDegrees(ro[1]));
+            poseStack.mulPose(Axis.ZP.rotationDegrees(ro[2]));
+
+            drawParts(poseStack, meshes, partTex);
+
+            // 子ノード（同じ親 Pose 上）
+            drawAttachedTree(
+                    poseStack,
+                    tree.getCompound(token),
+                    carRegistry,
+                    attachedBase,
+                    fallbackTex
+            );
+
+            poseStack.popPose();
+        }
+    }
+
+    private static Vec3 resolveChildPartOffset(String parentPartBase, String attachedBase, String seatGroup) {
+        if (!seatGroup.isEmpty()) {
+            CarJsonResult.PartPlacement p = PartRegistry.findPlacement(parentPartBase, seatGroup);
+            return p != null ? p.position : Vec3.ZERO;
+        }
+        for (String g : PartRegistry.getPartGroups(attachedBase)) {
+            CarJsonResult.PartPlacement p = PartRegistry.findPlacement(parentPartBase, g);
+            if (p != null) return p.position;
+        }
+        return Vec3.ZERO;
+    }
+
+    private static float[] resolveChildPartRotation(String parentPartBase, String attachedBase, String seatGroup) {
+        if (!seatGroup.isEmpty()) {
+            CarJsonResult.PartPlacement p = PartRegistry.findPlacement(parentPartBase, seatGroup);
+            if (p != null) return new float[]{p.rotX, p.rotY, p.rotZ};
+            return new float[]{0, 0, 0};
+        }
+        for (String g : PartRegistry.getPartGroups(attachedBase)) {
+            CarJsonResult.PartPlacement p = PartRegistry.findPlacement(parentPartBase, g);
+            if (p != null) return new float[]{p.rotX, p.rotY, p.rotZ};
+        }
+        return new float[]{0, 0, 0};
     }
 
     private static Vec3 resolvePartOffset(AssetRegistry registry, String attachedBase, String seatGroup) {

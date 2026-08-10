@@ -20,7 +20,6 @@ import java.util.UUID;
 @OnlyIn(Dist.CLIENT)
 public class PartGroupWrenchScreen extends WrenchGuiScreen {
 
-    private final PartsWrenchScreen parentScreen;
     private final String groupName;
 
     /** 0 = NONE, 1.. = パーツ */
@@ -29,26 +28,49 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
     private final List<String> labels = new ArrayList<>();
     private final List<String> baseNames = new ArrayList<>();
     private long marqueeStartMs = System.currentTimeMillis();
+    private final WrenchGuiScreen parentScreen;
 
-    public PartGroupWrenchScreen(PartsWrenchScreen parent, String groupName) {
+    private final List<String> attachmentPath;
+
+
+    public PartGroupWrenchScreen(WrenchGuiScreen parent, String groupName) {
+        this(parent, groupName, List.of());
+    }
+
+    public PartGroupWrenchScreen(WrenchGuiScreen parent, String groupName, List<String> attachmentPath) {
         super();
         this.parentScreen = parent;
         this.groupName = groupName != null ? groupName : "";
+        this.attachmentPath = attachmentPath != null
+                ? List.copyOf(attachmentPath)
+                : List.of();
 
         labels.add("NONE");
         baseNames.add(null);
 
         List<String> sorted = new ArrayList<>(PartRegistry.getBaseNamesForGroup(this.groupName));
-        sorted.sort(String::compareToIgnoreCase); // baseName 名順
+        sorted.sort(String::compareToIgnoreCase);
 
         for (String baseName : sorted) {
             labels.add(PartRegistry.getDisplayName(baseName));
             baseNames.add(baseName);
         }
 
-        // NBT の AttachedParts から、この group の装着中パーツを初期表示
         this.selectedIndex = findInitialIndexFromNbt();
         this.marqueeStartMs = System.currentTimeMillis();
+    }
+    private static net.minecraft.nbt.CompoundTag getNodeAtPath(
+            net.minecraft.nbt.CompoundTag attachedRoot, List<String> path) {
+        net.minecraft.nbt.CompoundTag node = attachedRoot;
+        if (path == null) return node;
+        for (String t : path) {
+            if (t == null || t.isBlank()) continue;
+            if (!node.contains(t, net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+                return new net.minecraft.nbt.CompoundTag();
+            }
+            node = node.getCompound(t);
+        }
+        return node;
     }
 
     private int findInitialIndexFromNbt() {
@@ -56,26 +78,19 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
         if (nbt == null || !nbt.contains("AttachedParts", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
             return 0;
         }
+        net.minecraft.nbt.CompoundTag node = getNodeAtPath(
+                nbt.getCompound("AttachedParts"), this.attachmentPath);
 
-        net.minecraft.nbt.CompoundTag attached = nbt.getCompound("AttachedParts");
-        for (String token : attached.getAllKeys()) {
+        for (String token : node.getAllKeys()) {
             if (token == null || token.isBlank()) continue;
-
             String base = com.hashiriyacarmod.CarEntity.attachedBaseName(token);
             String seat = com.hashiriyacarmod.CarEntity.attachedSeatGroup(token);
-
-            boolean belongsToThisSeat;
-            if (!seat.isEmpty()) {
-                belongsToThisSeat = seat.equals(this.groupName);
-            } else {
-                belongsToThisSeat = PartRegistry.getPartGroups(base).contains(this.groupName);
-            }
-            if (!belongsToThisSeat) continue;
-
+            boolean match = !seat.isEmpty()
+                    ? seat.equals(this.groupName)
+                    : PartRegistry.getPartGroups(base).contains(this.groupName);
+            if (!match) continue;
             for (int idx = 1; idx < baseNames.size(); idx++) {
-                if (base.equals(baseNames.get(idx))) {
-                    return idx;
-                }
+                if (base.equals(baseNames.get(idx))) return idx;
             }
         }
         return 0;
@@ -85,43 +100,39 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
             WrenchGuiScreen.lastReceivedNbt = new net.minecraft.nbt.CompoundTag();
         }
         net.minecraft.nbt.CompoundTag nbt = WrenchGuiScreen.lastReceivedNbt;
+        net.minecraft.nbt.CompoundTag root = nbt.contains("AttachedParts", net.minecraft.nbt.Tag.TAG_COMPOUND)
+                ? nbt.getCompound("AttachedParts").copy()
+                : new net.minecraft.nbt.CompoundTag();
 
-        net.minecraft.nbt.CompoundTag attached = new net.minecraft.nbt.CompoundTag();
-
-        if (nbt.contains("AttachedParts", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
-            net.minecraft.nbt.CompoundTag old = nbt.getCompound("AttachedParts");
-            for (String token : old.getAllKeys()) {
-                if (token == null || token.isBlank()) continue;
-
-                String base = com.hashiriyacarmod.CarEntity.attachedBaseName(token);
-                String seat = com.hashiriyacarmod.CarEntity.attachedSeatGroup(token);
-
-                // この座 group の装着は外す
-                if (!seat.isEmpty()) {
-                    if (seat.equals(group)) continue;
-                } else {
-                    if (PartRegistry.getPartGroups(base).contains(group)) continue;
-                }
-
-                // 子は空の {} のままコピー（ネストは後で）
-                attached.put(token, old.getCompound(token).copy());
+        net.minecraft.nbt.CompoundTag parent = root;
+        for (String pathToken : this.attachmentPath) {
+            if (pathToken == null || pathToken.isBlank()) continue;
+            if (!parent.contains(pathToken, net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+                parent.put(pathToken, new net.minecraft.nbt.CompoundTag());
             }
+            parent = parent.getCompound(pathToken);
         }
+
+        java.util.List<String> remove = new java.util.ArrayList<>();
+        for (String token : parent.getAllKeys()) {
+            String base = com.hashiriyacarmod.CarEntity.attachedBaseName(token);
+            String seat = com.hashiriyacarmod.CarEntity.attachedSeatGroup(token);
+            boolean match = !seat.isEmpty()
+                    ? seat.equals(group)
+                    : PartRegistry.getPartGroups(base).contains(group);
+            if (match) remove.add(token);
+        }
+        for (String t : remove) parent.remove(t);
 
         if (partBaseName != null && !partBaseName.isBlank()
                 && !"NONE".equalsIgnoreCase(partBaseName)) {
             String base = partBaseName.trim();
             List<String> partGroups = PartRegistry.getPartGroups(base);
-            String token;
-            if (partGroups.size() <= 1) {
-                token = base;
-            } else {
-                token = base + ">" + group.trim();
-            }
-            attached.put(token, new net.minecraft.nbt.CompoundTag());
+            String token = partGroups.size() <= 1 ? base : base + ">" + group.trim();
+            parent.put(token, new net.minecraft.nbt.CompoundTag());
         }
 
-        nbt.put("AttachedParts", attached);
+        nbt.put("AttachedParts", root);
     }
 
     @Override
@@ -191,6 +202,27 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
                 && mouseY >= arrowY2 && mouseY <= arrowY2 + this.font.lineHeight;
         guiGraphics.drawString(this.font, arrow2, arrowX2, arrowY2,
                 hoveringArrow2 ? 0xFFFFFF : 0xCCCCCC);
+
+        if (hoveringCenter) {
+            guiGraphics.renderTooltip(
+                    this.font,
+                    java.util.List.of(
+                            Component.literal("Left-click: Equip part")
+                    ),
+                    java.util.Optional.empty(),
+                    mouseX,
+                    mouseY
+            );
+        }
+
+        Component partsLink = Component.literal("Parts");
+        int partsW = this.font.width(partsLink);
+        int partsX = this.leftPos + (IMAGE_WIDTH - partsW) / 2;
+        int partsY = this.topPos + 30 + this.font.lineHeight + 10;
+        boolean hoveringParts = mouseX >= partsX && mouseX <= partsX + partsW
+                && mouseY >= partsY && mouseY <= partsY + this.font.lineHeight;
+        guiGraphics.drawString(this.font, partsLink, partsX, partsY,
+                hoveringParts ? 0xFFFFFF : 0xCCCCCC);
     }
 
     @Override
@@ -239,10 +271,15 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
                 partBase = "NONE";
             }
 
-            // サーバーへ
             ModNetworking.sendToServer(
-                    new SetAttachedPartPacket(carId, this.groupName, partBase)
+                    new SetAttachedPartPacket(
+                            carId,
+                            this.attachmentPath,
+                            this.groupName,
+                            partBase
+                    )
             );
+            applyAttachedPartToLocalNbt(this.groupName, partBase);
 
             // 手元の NBT も同じ内容に更新（メニューを閉じなくても次ページで反映）
             applyAttachedPartToLocalNbt(this.groupName, partBase);
@@ -250,7 +287,74 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
             return true;
         }
 
+        Component partsLink = Component.literal("Parts");
+        int partsW = this.font.width(partsLink);
+        int partsX = this.leftPos + (IMAGE_WIDTH - partsW) / 2;
+        int partsY = this.topPos + 30 + this.font.lineHeight + 10;
+        if (mouseX >= partsX && mouseX <= partsX + partsW
+                && mouseY >= partsY && mouseY <= partsY + this.font.lineHeight) {
+
+            String equippedBase = null;
+            if (selectedIndex > 0 && selectedIndex < baseNames.size()) {
+                equippedBase = baseNames.get(selectedIndex);
+            }
+            if (equippedBase == null || equippedBase.isBlank()) {
+                equippedBase = findEquippedBaseFromNbt();
+            }
+
+            String parentToken = findEquippedTokenFromNbt();
+            java.util.List<String> childPath = new java.util.ArrayList<>(this.attachmentPath);
+            if (parentToken != null && !parentToken.isBlank()) {
+                childPath.add(parentToken);
+            }
+
+            Minecraft.getInstance().setScreen(
+                    new PartChildGroupsWrenchScreen(this, equippedBase, childPath));
+            return true;
+        }
+
         return true;
+    }
+
+    private String findEquippedTokenFromNbt() {
+        net.minecraft.nbt.CompoundTag nbt = WrenchGuiScreen.lastReceivedNbt;
+        if (nbt == null || !nbt.contains("AttachedParts", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+            return null;
+        }
+        net.minecraft.nbt.CompoundTag node = getNodeAtPath(
+                nbt.getCompound("AttachedParts"), this.attachmentPath);
+        for (String token : node.getAllKeys()) {
+            String base = com.hashiriyacarmod.CarEntity.attachedBaseName(token);
+            String seat = com.hashiriyacarmod.CarEntity.attachedSeatGroup(token);
+            boolean match = !seat.isEmpty()
+                    ? seat.equals(this.groupName)
+                    : PartRegistry.getPartGroups(base).contains(this.groupName);
+            if (match) return token;
+        }
+        return null;
+    }
+
+    public List<String> getAttachmentPath() {
+        return this.attachmentPath;
+    }
+
+    private String findEquippedBaseFromNbt() {
+        net.minecraft.nbt.CompoundTag nbt = WrenchGuiScreen.lastReceivedNbt;
+        if (nbt == null || !nbt.contains("AttachedParts", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+            return null;
+        }
+        net.minecraft.nbt.CompoundTag node = getNodeAtPath(
+                nbt.getCompound("AttachedParts"), this.attachmentPath);
+        for (String token : node.getAllKeys()) {
+            if (token == null || token.isBlank()) continue;
+            String base = com.hashiriyacarmod.CarEntity.attachedBaseName(token);
+            String seat = com.hashiriyacarmod.CarEntity.attachedSeatGroup(token);
+            boolean match = !seat.isEmpty()
+                    ? seat.equals(this.groupName)
+                    : PartRegistry.getPartGroups(base).contains(this.groupName);
+            if (match) return base;
+        }
+        return null;
     }
 
     @Override

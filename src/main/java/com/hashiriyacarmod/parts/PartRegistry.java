@@ -29,6 +29,13 @@ public class PartRegistry {
     /** baseName → 全体テクスチャパス（空 = 未指定） */
     private static final Map<String, String> partTexturePathMap = new LinkedHashMap<>();
 
+    /** baseName → このパーツの parts[]（子用 po/ro/group） */
+    private static final Map<String, List<com.hashiriyacarmod.cars.CarJsonResult.PartPlacement>> partPlacementMap =
+            new LinkedHashMap<>();
+    /** baseName → 子に付けられる group 名 */
+    private static final Map<String, List<String>> partAllowedChildGroupMap =
+            new LinkedHashMap<>();
+
     /** 従来どおり（group なし） */
     public static void register(String baseName, File objFile) {
         register(baseName, objFile, List.of(), "");
@@ -41,6 +48,13 @@ public class PartRegistry {
 
     /** group + 全体テクスチャパス付き登録 */
     public static void register(String baseName, File objFile, List<String> groups, String texturePath) {
+        register(baseName, objFile, groups, texturePath, List.of(), List.of());
+    }
+
+    /** group + テクスチャ + 子用 parts[] */
+    public static void register(String baseName, File objFile, List<String> groups, String texturePath,
+                                List<com.hashiriyacarmod.cars.CarJsonResult.PartPlacement> placements,
+                                List<String> allowedChildGroups) {
         if (objFile == null || !objFile.exists()) {
             LOGGER.warn("[PartRegistry] OBJが見つかりません: {}", baseName);
             return;
@@ -55,14 +69,21 @@ public class PartRegistry {
         partMeshMap.put(baseName, meshParts);
         partGroupMap.put(baseName, groups != null ? List.copyOf(groups) : List.of());
         partTexturePathMap.put(baseName, texturePath != null ? texturePath.trim() : "");
-        LOGGER.info("[PartRegistry] パーツ登録完了: {} ({} メッシュ, groups={}, texture_path={})",
+        partPlacementMap.put(baseName,
+                placements != null ? List.copyOf(placements) : List.of());
+        partAllowedChildGroupMap.put(baseName,
+                allowedChildGroups != null ? List.copyOf(allowedChildGroups) : List.of());
+
+        LOGGER.info("[PartRegistry] パーツ登録完了: {} ({} メッシュ, groups={}, childSeats={}, texture_path={})",
                 baseName, meshParts.size(), partGroupMap.get(baseName),
+                partAllowedChildGroupMap.get(baseName),
                 partTexturePathMap.get(baseName));
     }
 
     public static void register(String baseName, File objFile, File jsonFile) {
         PartJsonResult parsed = PartJsonParser.parse(jsonFile);
-        register(baseName, objFile, parsed.groups, parsed.texturePath);
+        register(baseName, objFile, parsed.groups, parsed.texturePath,
+                parsed.partPlacements, parsed.allowedChildGroups);
         String name = parsed.displayName;
         if (name == null || name.isEmpty()) {
             name = baseName;
@@ -108,5 +129,27 @@ public class PartRegistry {
             if (carAllowedGroups.contains(pg)) return true;
         }
         return false;
+    }
+    public static List<com.hashiriyacarmod.cars.CarJsonResult.PartPlacement> getPartPlacements(String baseName) {
+        List<com.hashiriyacarmod.cars.CarJsonResult.PartPlacement> p = partPlacementMap.get(baseName);
+        return p != null ? p : List.of();
+    }
+
+    public static List<String> getAllowedChildGroups(String baseName) {
+        List<String> g = partAllowedChildGroupMap.get(baseName);
+        return g != null ? g : List.of();
+    }
+
+    public static com.hashiriyacarmod.cars.CarJsonResult.PartPlacement findPlacement(
+            String parentPartBase, String seatGroup) {
+        if (parentPartBase == null || seatGroup == null || seatGroup.isEmpty()) {
+            return null;
+        }
+        for (com.hashiriyacarmod.cars.CarJsonResult.PartPlacement p : getPartPlacements(parentPartBase)) {
+            if (p.groups != null && p.groups.contains(seatGroup)) {
+                return p;
+            }
+        }
+        return null;
     }
 }

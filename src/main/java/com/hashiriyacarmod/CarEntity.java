@@ -27,7 +27,8 @@ public class CarEntity extends Entity {
             SynchedEntityData.defineId(CarEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<String> ATTACHED_PARTS =
             SynchedEntityData.defineId(CarEntity.class, EntityDataSerializers.STRING);
-
+    /** 装着ツリー（/summon の AttachedParts と同型） */
+    private CompoundTag attachedPartsTree = new CompoundTag();
 
     public CarEntity(EntityType<?> type, Level level) {
         super(type, level);
@@ -175,58 +176,165 @@ public class CarEntity extends Entity {
     }
 
     public List<String> getAttachedParts() {
-        String raw = this.entityData.get(ATTACHED_PARTS);
-        if (raw == null || raw.isEmpty()) return List.of();
-        return List.of(raw.split(","));
+        return new java.util.ArrayList<>(attachedPartsTree.getAllKeys());
+    }
+
+    public CompoundTag getAttachedPartsTree() {
+        return attachedPartsTree;
     }
 
     public void setAttachedParts(List<String> parts) {
-        List<String> filtered = filterAttachedPartsForThisCar(parts);
-        String joined = filtered.isEmpty() ? "" : String.join(",", filtered);
-        this.entityData.set(ATTACHED_PARTS, joined);
-        // クライアントは onSyncedDataUpdated でバッファ調整（サーバーでは何もしない）
+        CompoundTag tree = new CompoundTag();
+        for (String t : filterAttachedPartsForThisCar(parts)) {
+            tree.put(t, new CompoundTag());
+        }
+        applyAttachedTree(tree);
     }
 
-    public void setAttachedPartForGroup(String groupName, String partBaseName) {
-        if (groupName == null || groupName.isBlank()) return;
+    private void applyAttachedTree(CompoundTag tree) {
+        this.attachedPartsTree = tree != null ? tree.copy() : new CompoundTag();
+        String sync = this.attachedPartsTree.isEmpty()
+                ? ""
+                : this.attachedPartsTree.toString();
+        this.entityData.set(ATTACHED_PARTS, sync);
+    }
 
-        List<String> current = new java.util.ArrayList<>(getAttachedParts());
-
-        // この座 group に付いている装着を外す（>group 形式と、旧形式の両方）
-        current.removeIf(token -> {
-            String seat = attachedSeatGroup(token);
-            if (!seat.isEmpty()) {
-                return seat.equals(groupName);
-            }
-            // 旧形式: baseName のみ → パーツが持つ group で判定
-            List<String> gs = PartRegistry.getPartGroups(attachedBaseName(token));
-            return gs.contains(groupName);
-        });
-
-        if (partBaseName != null && !partBaseName.isBlank()
-                && !"NONE".equalsIgnoreCase(partBaseName)) {
-            String base = partBaseName.trim();
-            // 常に base>group で保存（座を一意に特定）
-            List<String> partGroups = PartRegistry.getPartGroups(base);
-            if (partGroups.size() <= 1) {
-                // group が1つ（または未定義）→ 短縮形
-                current.add(base);
-            } else {
-                // 複数 group → 座を指定
-                current.add(base + ">" + groupName.trim());
-            }
+    private static CompoundTag parseAttachedTreeSnbt(String raw) {
+        if (raw == null || raw.isBlank()) return new CompoundTag();
+        try {
+            net.minecraft.nbt.Tag tag = net.minecraft.nbt.TagParser.parseTag(raw);
+            if (tag instanceof CompoundTag c) return c;
+        } catch (Exception ignored) {}
+        CompoundTag flat = new CompoundTag();
+        for (String p : raw.split(",")) {
+            if (p != null && !p.isBlank()) flat.put(p.trim(), new CompoundTag());
         }
+        return flat;
+    }
 
-        setAttachedParts(current);
+    public CompoundTag filterAttachedTree(CompoundTag node, String parentPartBase) {
+        CompoundTag out = new CompoundTag();
+        if (node == null || node.isEmpty()) return out;
+
+        List<String> allowed = (parentPartBase == null || parentPartBase.isEmpty())
+                ? getAllowedPartGroups()
+                : PartRegistry.getAllowedChildGroups(parentPartBase);
+
+        for (String token : node.getAllKeys()) {
+            if (token == null || token.isBlank()) continue;
+            String t = token.trim();
+            String base = attachedBaseName(t);
+            String seat = attachedSeatGroup(t);
+            if (base.isEmpty()) continue;
+
+            List<String> partGroups = PartRegistry.getPartGroups(base);
+            if (partGroups.isEmpty()) continue;
+
+            boolean ok;
+            if (!seat.isEmpty()) {
+                ok = partGroups.contains(seat) && allowed.contains(seat);
+            } else {
+                ok = false;
+                for (String g : partGroups) {
+                    if (allowed.contains(g)) { ok = true; break; }
+                }
+            }
+            if (!ok) continue;
+
+            out.put(t, filterAttachedTree(node.getCompound(t), base));
+        }
+        return out;
     }
 
     @Override
     public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
         super.onSyncedDataUpdated(key);
-        if (ATTACHED_PARTS.equals(key) && this.level() != null && this.level().isClientSide()) {
-            // 装着構成が変わったときだけクライアント描画を更新（全員の画面が揃う）
-            invalidateAttachedPartBuffersOnly();
+        if (ATTACHED_PARTS.equals(key)) {
+            this.attachedPartsTree = parseAttachedTreeSnbt(this.entityData.get(ATTACHED_PARTS));
+            if (this.level() != null && this.level().isClientSide()) {
+                invalidateAttachedPartBuffersOnly();
+            }
         }
+    }
+
+    @Override
+    protected void readAdditionalSaveData(CompoundTag tag) {
+        if (tag.contains("BaseName")) setBaseName(tag.getString("BaseName"));
+        if (tag.contains("CarPitch")) setCarPitch(tag.getFloat("CarPitch"));
+        if (tag.contains("CarRoll")) setCarRoll(tag.getFloat("CarRoll"));
+
+        if (tag.contains("AttachedParts", CompoundTag.TAG_COMPOUND)) {
+            applyAttachedTree(filterAttachedTree(tag.getCompound("AttachedParts"), null));
+        }
+    }
+
+    @Override
+    protected void addAdditionalSaveData(CompoundTag tag) {
+        tag.putString("BaseName", getBaseName());
+        tag.putFloat("CarPitch", getCarPitch());
+        tag.putFloat("CarRoll", getCarRoll());
+        tag.put("AttachedParts", attachedPartsTree.copy());
+    }
+
+    public void setAttachedPartForGroup(String groupName, String partBaseName) {
+        setAttachedPartInTree(List.of(), groupName, partBaseName);
+    }
+
+    /**
+     * pathTokens = 親ノードまでのキー列（空なら AttachedParts 直下）
+     * その親の下で groupName に属する装着を付け替える。
+     */
+    public void setAttachedPartInTree(List<String> pathTokens, String groupName, String partBaseName) {
+        if (groupName == null || groupName.isBlank()) return;
+
+        CompoundTag root = this.attachedPartsTree.copy();
+        CompoundTag parent = root;
+
+        if (pathTokens != null) {
+            for (String pathToken : pathTokens) {
+                if (pathToken == null || pathToken.isBlank()) continue;
+                if (!parent.contains(pathToken, CompoundTag.TAG_COMPOUND)) {
+                    parent.put(pathToken, new CompoundTag());
+                }
+                parent = parent.getCompound(pathToken);
+            }
+        }
+
+        // この seat の既存トークンを削除（子ツリーごと消える）
+        java.util.List<String> remove = new java.util.ArrayList<>();
+        for (String token : parent.getAllKeys()) {
+            if (tokenBelongsToSeat(token, groupName)) {
+                remove.add(token);
+            }
+        }
+        for (String t : remove) {
+            parent.remove(t);
+        }
+
+        if (partBaseName != null && !partBaseName.isBlank()
+                && !"NONE".equalsIgnoreCase(partBaseName)) {
+            String base = partBaseName.trim();
+            List<String> partGroups = PartRegistry.getPartGroups(base);
+            String token = (partGroups.size() <= 1)
+                    ? base
+                    : base + ">" + groupName.trim();
+            parent.put(token, new CompoundTag());
+        }
+
+        // path 上の親 base で再帰フィルタ
+        String parentBaseForFilter = null;
+        if (pathTokens != null && !pathTokens.isEmpty()) {
+            parentBaseForFilter = attachedBaseName(pathTokens.get(pathTokens.size() - 1));
+        }
+        applyAttachedTree(filterAttachedTree(root, null));
+    }
+
+    private static boolean tokenBelongsToSeat(String token, String groupName) {
+        String seat = attachedSeatGroup(token);
+        if (!seat.isEmpty()) {
+            return seat.equals(groupName);
+        }
+        return PartRegistry.getPartGroups(attachedBaseName(token)).contains(groupName);
     }
 
     /** 車本体VBOは残し、装着パーツのバッファだけ捨てる（OBJ再読込なし） */
@@ -454,46 +562,7 @@ public class CarEntity extends Entity {
         invalidateRenderCache();
     }
 
-    // ==================== データ保存 ====================
 
-    @Override
-    protected void readAdditionalSaveData(CompoundTag tag) {
-        if (tag.contains("BaseName")) {
-            setBaseName(tag.getString("BaseName"));
-        }
-        if (tag.contains("CarPitch")) {
-            setCarPitch(tag.getFloat("CarPitch"));
-        }
-        if (tag.contains("CarRoll")) {
-            setCarRoll(tag.getFloat("CarRoll"));
-        }
-
-        // AttachedParts:{ae86frontaero1:{}, ...}
-        if (tag.contains("AttachedParts", CompoundTag.TAG_COMPOUND)) {
-            CompoundTag compound = tag.getCompound("AttachedParts");
-            List<String> list = new java.util.ArrayList<>();
-            for (String key : compound.getAllKeys()) {
-                if (key != null && !key.isBlank()) {
-                    list.add(key.trim());
-                }
-            }
-            setAttachedParts(list);
-        }
-    }
-
-    @Override
-    protected void addAdditionalSaveData(CompoundTag tag) {
-        tag.putString("BaseName", getBaseName());
-        tag.putFloat("CarPitch", getCarPitch());
-        tag.putFloat("CarRoll", getCarRoll());
-        CompoundTag attached = new CompoundTag();
-        for (String p : getAttachedParts()) {
-            if (p == null || p.isBlank()) continue;
-            // 子はとりあえず空の {}（ネストは後で）
-            attached.put(p.trim(), new CompoundTag());
-        }
-        tag.put("AttachedParts", attached);
-    }
 
     public CompoundTag getSaveData() {
         CompoundTag tag = new CompoundTag();
@@ -517,7 +586,6 @@ public class CarEntity extends Entity {
             return Vec3.ZERO;
         }
 
-        // 旧形式: パーツの group で最初の一致
         List<String> partGroups = PartRegistry.getPartGroups(base);
         for (CarJsonResult.PartPlacement p : registry.partPlacements) {
             for (String g : partGroups) {
@@ -529,6 +597,7 @@ public class CarEntity extends Entity {
         return Vec3.ZERO;
     }
 
+    /** 車の parts[] から ro（ルート装着） */
     public float[] getPartRotation(String attachedToken) {
         String base = attachedBaseName(attachedToken);
         String seat = attachedSeatGroup(attachedToken);
@@ -552,6 +621,41 @@ public class CarEntity extends Entity {
                     return new float[]{p.rotX, p.rotY, p.rotZ};
                 }
             }
+        }
+        return new float[]{0, 0, 0};
+    }
+
+    public Vec3 getPartOffset(String parentPartBase, String attachedToken) {
+        if (parentPartBase == null || parentPartBase.isEmpty()) {
+            return getPartOffset(attachedToken);
+        }
+        String base = attachedBaseName(attachedToken);
+        String seat = attachedSeatGroup(attachedToken);
+        if (!seat.isEmpty()) {
+            CarJsonResult.PartPlacement p = PartRegistry.findPlacement(parentPartBase, seat);
+            return p != null ? p.position : Vec3.ZERO;
+        }
+        for (String g : PartRegistry.getPartGroups(base)) {
+            CarJsonResult.PartPlacement p = PartRegistry.findPlacement(parentPartBase, g);
+            if (p != null) return p.position;
+        }
+        return Vec3.ZERO;
+    }
+
+    public float[] getPartRotation(String parentPartBase, String attachedToken) {
+        if (parentPartBase == null || parentPartBase.isEmpty()) {
+            return getPartRotation(attachedToken);
+        }
+        String base = attachedBaseName(attachedToken);
+        String seat = attachedSeatGroup(attachedToken);
+        if (!seat.isEmpty()) {
+            CarJsonResult.PartPlacement p = PartRegistry.findPlacement(parentPartBase, seat);
+            if (p != null) return new float[]{p.rotX, p.rotY, p.rotZ};
+            return new float[]{0, 0, 0};
+        }
+        for (String g : PartRegistry.getPartGroups(base)) {
+            CarJsonResult.PartPlacement p = PartRegistry.findPlacement(parentPartBase, g);
+            if (p != null) return new float[]{p.rotX, p.rotY, p.rotZ};
         }
         return new float[]{0, 0, 0};
     }

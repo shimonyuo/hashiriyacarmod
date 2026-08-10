@@ -72,13 +72,65 @@ public class PartJsonParser {
                 texturePath = root.get("texture_path").getAsString().trim();
             }
 
+            // ===== 車と同じ parts[]（子パーツ用の座 po/ro/group）=====
+            List<com.hashiriyacarmod.cars.CarJsonResult.PartPlacement> partPlacements =
+                    new ArrayList<>();
+            List<String> allowedChildGroups = new ArrayList<>();
+
+            if (root.has("parts") && root.get("parts").isJsonArray()) {
+                JsonArray partsArray = root.getAsJsonArray("parts");
+                for (int i = 0; i < partsArray.size(); i++) {
+                    if (!partsArray.get(i).isJsonObject()) continue;
+                    JsonObject partObj = partsArray.get(i).getAsJsonObject();
+
+                    net.minecraft.world.phys.Vec3 position =
+                            net.minecraft.world.phys.Vec3.ZERO;
+                    if (partObj.has("po") && partObj.get("po").isJsonArray()) {
+                        JsonArray po = partObj.getAsJsonArray("po");
+                        if (po.size() >= 3) {
+                            position = new net.minecraft.world.phys.Vec3(
+                                    po.get(0).getAsDouble(),
+                                    po.get(1).getAsDouble(),
+                                    po.get(2).getAsDouble()
+                            );
+                        }
+                    }
+
+                    float rotX = 0f, rotY = 0f, rotZ = 0f;
+                    if (partObj.has("ro") && partObj.get("ro").isJsonArray()) {
+                        JsonArray ro = partObj.getAsJsonArray("ro");
+                        if (ro.size() >= 3) {
+                            rotX = ro.get(0).getAsFloat();
+                            rotY = ro.get(1).getAsFloat();
+                            rotZ = ro.get(2).getAsFloat();
+                        }
+                    }
+
+                    List<String> seatGroups = new ArrayList<>();
+                    if (partObj.has("group")) {
+                        seatGroups.addAll(readStringList(partObj.get("group")));
+                        for (String g : seatGroups) {
+                            if (!allowedChildGroups.contains(g)) {
+                                allowedChildGroups.add(g);
+                            }
+                        }
+                    }
+
+                    partPlacements.add(
+                            new com.hashiriyacarmod.cars.CarJsonResult.PartPlacement(
+                                    position, rotX, rotY, rotZ, seatGroups));
+                }
+            }
+
+            return new PartJsonResult(
+                    displayName, type, groups, texturePath,
+                    partPlacements, allowedChildGroups);
+
         } catch (Exception e) {
             LOGGER.warn("[PartJsonParser] 読み取り失敗: {} ({})",
                     jsonFile.getName(), e.toString());
             return PartJsonResult.empty(fallbackName);
         }
-
-        return new PartJsonResult(displayName, type, groups, texturePath);
     }
 
     private static List<String> readStringList(JsonElement element) {
