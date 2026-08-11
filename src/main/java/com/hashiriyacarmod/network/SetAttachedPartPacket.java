@@ -1,11 +1,15 @@
 package com.hashiriyacarmod.network;
 
 import com.hashiriyacarmod.CarEntity;
+import com.hashiriyacarmod.parts.DefaultAttachedPartsApplier;
+import com.hashiriyacarmod.parts.PartRegistry;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraftforge.network.NetworkEvent;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -56,7 +60,48 @@ public class SetAttachedPartPacket {
             if (!(entity instanceof CarEntity car)) return;
 
             car.setAttachedPartInTree(msg.pathTokens, msg.groupName, msg.partBaseName);
+
+            // NONE で外したときは子 default 不要
+            if (msg.partBaseName == null
+                    || msg.partBaseName.isBlank()
+                    || "NONE".equalsIgnoreCase(msg.partBaseName)) {
+                return;
+            }
+
+            // 今付けたノードのトークンを path 先から探す
+            String token = findAttachedToken(car, msg.pathTokens, msg.groupName, msg.partBaseName);
+            if (token == null) return;
+
+            List<String> childPath = new ArrayList<>(msg.pathTokens);
+            childPath.add(token);
+
+            // そのパーツ JSON の parts[].default を再帰適用
+            DefaultAttachedPartsApplier.applyPlacements(
+                    car,
+                    childPath,
+                    PartRegistry.getPartPlacements(msg.partBaseName.trim())
+            );
         });
         ctx.get().setPacketHandled(true);
+    }
+
+    private static String findAttachedToken(CarEntity car, List<String> path,
+                                            String group, String expectedBase) {
+        CompoundTag node = car.getAttachedPartsTree();
+        if (path != null) {
+            for (String t : path) {
+                if (t == null || t.isBlank()) continue;
+                if (!node.contains(t, CompoundTag.TAG_COMPOUND)) return null;
+                node = node.getCompound(t);
+            }
+        }
+        String prefer = expectedBase + ">" + group;
+        if (node.contains(prefer)) return prefer;
+        for (String key : node.getAllKeys()) {
+            if (!CarEntity.attachedBaseName(key).equals(expectedBase)) continue;
+            String seat = CarEntity.attachedSeatGroup(key);
+            if (seat.isEmpty() || seat.equals(group)) return key;
+        }
+        return null;
     }
 }

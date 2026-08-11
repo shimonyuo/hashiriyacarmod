@@ -1,5 +1,6 @@
 package com.hashiriyacarmod;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
@@ -9,23 +10,45 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraftforge.registries.RegistryObject;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 public class CarSpawnerItem extends Item {
 
     private final RegistryObject<EntityType<CarEntity>> entityTypeRef;
-    private final String displayName;
-    private final String baseName; // スポーン時にエンティティへ渡す
+    private final Map<String, String> displayNames;
+    private final String baseName;
 
     public CarSpawnerItem(RegistryObject<EntityType<CarEntity>> entityTypeRef,
-                          String displayName,
+                          Map<String, String> displayNames,
                           String baseName) {
         super(new Item.Properties());
         this.entityTypeRef = entityTypeRef;
-        this.displayName   = displayName;
-        this.baseName      = baseName;
+        this.displayNames = displayNames != null
+                ? Map.copyOf(displayNames)
+                : Map.of("default", baseName != null ? baseName : "");
+        this.baseName = baseName;
+    }
+
+    /** 旧コンストラクタ互換（文字列1本＝default） */
+    public CarSpawnerItem(RegistryObject<EntityType<CarEntity>> entityTypeRef,
+                          String displayName,
+                          String baseName) {
+        this(entityTypeRef, singleDefault(displayName, baseName), baseName);
+    }
+
+    private static Map<String, String> singleDefault(String displayName, String baseName) {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put("default", displayName != null && !displayName.isEmpty()
+                ? displayName
+                : (baseName != null ? baseName : ""));
+        return m;
     }
 
     @Override
@@ -33,27 +56,17 @@ public class CarSpawnerItem extends Item {
         Level level = context.getLevel();
         if (level.isClientSide()) return net.minecraft.world.InteractionResult.SUCCESS;
 
-        // ① 「右クリックで実際にカーソルが当たった正確な座標」を取得します
-        //    （ブロックの角ではなく、クリックした面の実際の位置）
         Vec3 hitPos = context.getClickLocation();
-
-        // ② 右クリックしたプレイヤーを取得します
         Player player = context.getPlayer();
-
-        // ③ プレイヤーが向いている角度（ヨー）を取得します
-        //    プレイヤーがいない場合は保険として0（北向き）にします
         float playerYaw = (player != null) ? player.getYRot() : 0f;
 
         CarEntity entity = new CarEntity(entityTypeRef.get(), level);
-
-        // ④ クリックした地点そのものに、プレイヤーの向きでスポーンさせます
         entity.moveTo(hitPos.x, hitPos.y, hitPos.z, playerYaw, 0f);
-
         entity.setYRot(entity.getYRot() + 0f);
         entity.setCarPitch(0f);
         entity.setCarRoll(0f);
-
-        entity.setBaseName(baseName); // どの車かを記録
+        entity.setBaseName(baseName);
+        com.hashiriyacarmod.parts.DefaultAttachedPartsApplier.applyDefaultsIfEmpty(entity);
         level.addFreshEntity(entity);
 
         return net.minecraft.world.InteractionResult.SUCCESS;
@@ -61,7 +74,30 @@ public class CarSpawnerItem extends Item {
 
     @Override
     public Component getName(ItemStack stack) {
-        return Component.literal(displayName);
+        return Component.literal(resolveDisplayName());
+    }
+
+    private String resolveDisplayName() {
+        String lang = "default";
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            try {
+                lang = Minecraft.getInstance().getLanguageManager().getSelected();
+            } catch (Exception ignored) {
+                lang = "default";
+            }
+        }
+        if (lang != null) {
+            String key = lang.toLowerCase(Locale.ROOT);
+            String specific = displayNames.get(key);
+            if (specific != null && !specific.isEmpty()) {
+                return specific;
+            }
+        }
+        String def = displayNames.get("default");
+        if (def != null && !def.isEmpty()) {
+            return def;
+        }
+        return baseName != null ? baseName : "";
     }
 
     @Override

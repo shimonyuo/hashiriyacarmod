@@ -130,9 +130,51 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
             List<String> partGroups = PartRegistry.getPartGroups(base);
             String token = partGroups.size() <= 1 ? base : base + ">" + group.trim();
             parent.put(token, new net.minecraft.nbt.CompoundTag());
+
+            // そのパーツ JSON の parts[].default をローカル NBT にも付ける
+            applyDefaultChildrenToNbt(parent.getCompound(token), base);
         }
 
         nbt.put("AttachedParts", root);
+    }
+
+    /** parentNode 直下に、parentPartBase の parts[].default を再帰で書く */
+    private static void applyDefaultChildrenToNbt(
+            net.minecraft.nbt.CompoundTag parentNode, String parentPartBase) {
+        if (parentNode == null || parentPartBase == null || parentPartBase.isEmpty()) {
+            return;
+        }
+
+        for (var p : PartRegistry.getPartPlacements(parentPartBase)) {
+            if (p.defaultPart == null || p.defaultPart.isEmpty()) continue;
+            if (p.groups == null || p.groups.isEmpty()) continue;
+
+            for (String seat : p.groups) {
+                if (seat == null || seat.isBlank()) continue;
+                String seatTrim = seat.trim();
+                String childBase = p.defaultPart.trim();
+
+                // 同 seat の既存を削除
+                java.util.List<String> remove = new java.util.ArrayList<>();
+                for (String t : parentNode.getAllKeys()) {
+                    String b = com.hashiriyacarmod.CarEntity.attachedBaseName(t);
+                    String s = com.hashiriyacarmod.CarEntity.attachedSeatGroup(t);
+                    boolean match = !s.isEmpty()
+                            ? s.equals(seatTrim)
+                            : PartRegistry.getPartGroups(b).contains(seatTrim);
+                    if (match) remove.add(t);
+                }
+                for (String t : remove) parentNode.remove(t);
+
+                List<String> childGroups = PartRegistry.getPartGroups(childBase);
+                String childToken = childGroups.size() <= 1
+                        ? childBase
+                        : childBase + ">" + seatTrim;
+
+                parentNode.put(childToken, new net.minecraft.nbt.CompoundTag());
+                applyDefaultChildrenToNbt(parentNode.getCompound(childToken), childBase);
+            }
+        }
     }
 
     @Override
@@ -279,9 +321,6 @@ public class PartGroupWrenchScreen extends WrenchGuiScreen {
                             partBase
                     )
             );
-            applyAttachedPartToLocalNbt(this.groupName, partBase);
-
-            // 手元の NBT も同じ内容に更新（メニューを閉じなくても次ページで反映）
             applyAttachedPartToLocalNbt(this.groupName, partBase);
 
             return true;

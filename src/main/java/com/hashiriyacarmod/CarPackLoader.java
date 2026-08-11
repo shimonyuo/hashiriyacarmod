@@ -238,9 +238,11 @@ public class CarPackLoader {
                         .build(HashiriyaCarMod.MOD_ID + ":" + entityId)
         );
 
+        final Map<String, String> finalDisplayNames = result.displayNames;
+
         RegistryObject<Item> spawnItem = ITEMS.register(
                 entityId + "_spawner",
-                () -> new CarSpawnerItem(entityType, finalDisplayName, finalBaseName)
+                () -> new CarSpawnerItem(entityType, finalDisplayNames, finalBaseName)
         );
 
         tabItems.get(tabId).add(spawnItem);

@@ -259,7 +259,9 @@ public class CarEntity extends Entity {
 
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
-        if (tag.contains("BaseName")) setBaseName(tag.getString("BaseName"));
+        if (tag.contains("BaseName")) {
+            setBaseName(tag.getString("BaseName"));
+        }
         if (tag.contains("CarPitch")) setCarPitch(tag.getFloat("CarPitch"));
         if (tag.contains("CarRoll")) setCarRoll(tag.getFloat("CarRoll"));
 
@@ -319,12 +321,6 @@ public class CarEntity extends Entity {
                     ? base
                     : base + ">" + groupName.trim();
             parent.put(token, new CompoundTag());
-        }
-
-        // path 上の親 base で再帰フィルタ
-        String parentBaseForFilter = null;
-        if (pathTokens != null && !pathTokens.isEmpty()) {
-            parentBaseForFilter = attachedBaseName(pathTokens.get(pathTokens.size() - 1));
         }
         applyAttachedTree(filterAttachedTree(root, null));
     }

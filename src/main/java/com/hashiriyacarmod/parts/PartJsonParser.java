@@ -116,9 +116,14 @@ public class PartJsonParser {
                         }
                     }
 
+                    String defaultPart = "";
+                    if (partObj.has("default") && partObj.get("default").isJsonPrimitive()) {
+                        defaultPart = partObj.get("default").getAsString().trim();
+                    }
+
                     partPlacements.add(
                             new com.hashiriyacarmod.cars.CarJsonResult.PartPlacement(
-                                    position, rotX, rotY, rotZ, seatGroups));
+                                    position, rotX, rotY, rotZ, seatGroups, defaultPart));
                 }
             }
 
