@@ -3,9 +3,8 @@ package com.hashiriyacarmod.item;
 import com.hashiriyacarmod.CarCollisionUtil;
 import com.hashiriyacarmod.CarEntity;
 import com.hashiriyacarmod.client.WrenchGuiScreen;
-import com.hashiriyacarmod.network.CarWrenchDataPacket;   // ← 追加
+import com.hashiriyacarmod.network.CarWrenchDataPacket;
 import com.hashiriyacarmod.network.ModNetworking;
-import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -19,13 +18,9 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
+
 import java.util.List;
 
-/**
- * 車のパーツ調整に使うレンチアイテムです。
- */
 public class WrenchItem extends Item {
 
     public WrenchItem(Properties properties) {
@@ -37,13 +32,11 @@ public class WrenchItem extends Item {
         ItemStack stack = player.getItemInHand(hand);
 
         if (level.isClientSide()) {
-            // 自分が開こうとした印（リプレイのパケット再生だけでは開かない）
             WrenchGuiScreen.expectGuiFromServer = true;
             return InteractionResultHolder.consume(stack);
         }
-        // サーバー側
-        sendCarDataToClient((ServerPlayer) player);
 
+        sendCarDataToClient((ServerPlayer) player);
         return InteractionResultHolder.consume(stack);
     }
 
@@ -60,26 +53,26 @@ public class WrenchItem extends Item {
         Vec3 lineEnd = eyePos.add(lookDir.scale(reach));
 
         AABB searchArea = new AABB(eyePos, lineEnd).inflate(reach);
-        List<Entity> nearbyEntities = player.level().getEntities(player, searchArea, e -> e instanceof CarEntity);
+        List<Entity> nearbyEntities = player.level().getEntities(
+                player, searchArea, e -> e instanceof CarEntity);
 
         CarEntity closestCar = null;
         double closestDistanceSq = Double.MAX_VALUE;
 
         for (Entity entity : nearbyEntities) {
             CarEntity car = (CarEntity) entity;
-            var defs = car.getHitboxDefinitions();
-            if (defs.isEmpty()) continue;
+            if (car.getHitboxDefinitions().isEmpty()) continue;
 
             boolean hit = false;
-            for (Vec3[] worldVertices : car.getAllWorldHitboxVertices()) {
-                if (CarCollisionUtil.lineIntersectsBox(eyePos, lineEnd, worldVertices)) {
+            for (CarEntity.WorldHitbox hb : car.getAllWorldHitboxes()) {
+                if (CarCollisionUtil.lineIntersectsBox(
+                        eyePos, lineEnd, hb.vertices, hb.skipFaces)) {
                     hit = true;
                     break;
                 }
             }
             if (!hit) continue;
 
-            // 視線始点からの距離を計算
             double distSq = eyePos.distanceToSqr(car.position());
             if (distSq < closestDistanceSq) {
                 closestDistanceSq = distSq;
@@ -89,11 +82,10 @@ public class WrenchItem extends Item {
 
         if (closestCar == null) return;
 
-        // 一番近い車のデータを送信
         CompoundTag savedNbt = closestCar.getSaveData();
         List<String> groups = closestCar.getAllowedPartGroups();
-
-        CarWrenchDataPacket packet = new CarWrenchDataPacket(closestCar.getUUID(), savedNbt, groups);
+        CarWrenchDataPacket packet = new CarWrenchDataPacket(
+                closestCar.getUUID(), savedNbt, groups);
         ModNetworking.sendToClient(player, packet);
     }
 }

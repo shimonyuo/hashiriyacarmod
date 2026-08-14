@@ -19,8 +19,8 @@ import net.minecraftforge.registries.RegistryObject;
 import net.minecraft.world.item.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import com.google.gson.JsonArray;
-import net.minecraft.world.phys.Vec3;
+import java.util.Collection;
+import java.util.Collections;
 
 import java.io.File;
 import java.io.FileReader;
@@ -34,6 +34,12 @@ public class CarPackLoader {
     /** その車が持つ、すべての当たり判定の箱を返します。定義がなければ空リストです。 */
     public static List<HitboxDefinition> getHitboxDefinitions(String baseName) {
         return hitboxMap.getOrDefault(baseName, List.of());
+    }
+
+    private static final Map<String, List<HitFaceDefinition>> hitFaceMap = new LinkedHashMap<>();
+
+    public static List<HitFaceDefinition> getHitFaceDefinitions(String baseName) {
+        return hitFaceMap.getOrDefault(baseName, List.of());
     }
 
     private static final Logger LOGGER = LogManager.getLogger(HashiriyaCarMod.MOD_ID);
@@ -79,6 +85,10 @@ public class CarPackLoader {
 
     public static AssetRegistry getAssetRegistry(String baseName) {
         return assetRegistryMap.get(baseName);
+    }
+
+    public static Collection<AssetRegistry> getAllAssetRegistries() {
+        return Collections.unmodifiableCollection(assetRegistryMap.values());
     }
 
     private static void loadPack(File packDir) {
@@ -206,6 +216,9 @@ public class CarPackLoader {
         if (!result.hitboxes.isEmpty()) {
             hitboxMap.put(baseName, result.hitboxes);
         }
+
+        hitFaceMap.put(baseName,
+                result.hitFaces != null ? result.hitFaces : List.of());
 
         if (!result.allowedPartGroups.isEmpty()) {
             LOGGER.debug("[HashiriyaCarMod] {} の allowedPartGroups: {}", baseName, result.allowedPartGroups);

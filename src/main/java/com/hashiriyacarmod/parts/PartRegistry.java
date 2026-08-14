@@ -5,12 +5,10 @@ import com.hashiriyacarmod.ObjMesh;
 import com.hashiriyacarmod.ObjLoader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
+import java.util.Collections;
+import java.util.Set;
 import java.io.File;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * type:"parts" のJSONと同名OBJを紐づけて管理するローダーです。
@@ -104,6 +102,10 @@ public class PartRegistry {
     public static List<String> getPartGroups(String baseName) {
         List<String> g = partGroupMap.get(baseName);
         return g != null ? g : List.of();
+    }
+
+    public static Set<String> getAllBaseNames() {
+        return Collections.unmodifiableSet(partGroupMap.keySet());
     }
 
     public static String getDisplayName(String baseName) {
