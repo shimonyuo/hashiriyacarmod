@@ -36,6 +36,13 @@ public class CarPackLoader {
         return hitboxMap.getOrDefault(baseName, List.of());
     }
 
+    private static final Map<String, List<HitFaceDefinition>> hitFaceMap = new LinkedHashMap<>();
+
+    /** OBBとは別経路の多角形平面。無ければ空リスト。 */
+    public static List<HitFaceDefinition> getHitFaceDefinitions(String baseName) {
+        return hitFaceMap.getOrDefault(baseName, List.of());
+    }
+
     private static final Logger LOGGER = LogManager.getLogger(HashiriyaCarMod.MOD_ID);
 
     private static final DeferredRegister<Item> ITEMS =
@@ -206,9 +213,15 @@ public class CarPackLoader {
         float width = result.width;
         float height = result.height;
 
-        // hitbox登録
         if (!result.hitboxes.isEmpty()) {
             hitboxMap.put(baseName, result.hitboxes);
+        }
+
+        // hitfaces登録（多角形平面・OBBとは別）
+        if (!result.hitFaces.isEmpty()) {
+            hitFaceMap.put(baseName, result.hitFaces);
+            LOGGER.info("[HashiriyaCarMod] {} の hitFaces: {} 枚",
+                    baseName, result.hitFaces.size());
         }
 
         if (!result.allowedPartGroups.isEmpty()) {

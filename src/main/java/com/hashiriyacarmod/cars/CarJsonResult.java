@@ -1,5 +1,6 @@
 package com.hashiriyacarmod.cars;
 
+import com.hashiriyacarmod.HitFaceDefinition;
 import com.hashiriyacarmod.HitboxDefinition;
 import net.minecraft.world.phys.Vec3;
 
@@ -24,16 +25,34 @@ public class CarJsonResult {
     public final List<String> allowedPartGroups;
     public final List<PartPlacement> partPlacements;
 
+    /** OBB とは別経路の多角形平面 */
+    public final List<HitFaceDefinition> hitFaces;
+
     public CarJsonResult(String displayName, float width, float height, String type,
                          List<HitboxDefinition> hitboxes, List<String> allowedPartGroups,
                          List<PartPlacement> partPlacements) {
         this(Map.of("default", displayName != null ? displayName : ""),
-                width, height, type, hitboxes, allowedPartGroups, partPlacements);
+                width, height, type, hitboxes, allowedPartGroups, partPlacements, List.of());
+    }
+
+    public CarJsonResult(String displayName, float width, float height, String type,
+                         List<HitboxDefinition> hitboxes, List<String> allowedPartGroups,
+                         List<PartPlacement> partPlacements,
+                         List<HitFaceDefinition> hitFaces) {
+        this(Map.of("default", displayName != null ? displayName : ""),
+                width, height, type, hitboxes, allowedPartGroups, partPlacements, hitFaces);
     }
 
     public CarJsonResult(Map<String, String> displayNames, float width, float height, String type,
                          List<HitboxDefinition> hitboxes, List<String> allowedPartGroups,
                          List<PartPlacement> partPlacements) {
+        this(displayNames, width, height, type, hitboxes, allowedPartGroups, partPlacements, List.of());
+    }
+
+    public CarJsonResult(Map<String, String> displayNames, float width, float height, String type,
+                         List<HitboxDefinition> hitboxes, List<String> allowedPartGroups,
+                         List<PartPlacement> partPlacements,
+                         List<HitFaceDefinition> hitFaces) {
         Map<String, String> copy = new LinkedHashMap<>();
         if (displayNames != null) {
             for (Map.Entry<String, String> e : displayNames.entrySet()) {
@@ -53,6 +72,7 @@ public class CarJsonResult {
         this.hitboxes = hitboxes != null ? hitboxes : new ArrayList<>();
         this.allowedPartGroups = allowedPartGroups != null ? allowedPartGroups : new ArrayList<>();
         this.partPlacements = partPlacements != null ? partPlacements : new ArrayList<>();
+        this.hitFaces = hitFaces != null ? hitFaces : new ArrayList<>();
     }
 
     /**

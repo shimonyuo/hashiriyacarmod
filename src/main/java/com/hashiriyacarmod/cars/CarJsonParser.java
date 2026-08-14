@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.hashiriyacarmod.HashiriyaCarMod;
+import com.hashiriyacarmod.HitFaceDefinition;
 import com.hashiriyacarmod.HitboxDefinition;
 import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
@@ -33,13 +34,14 @@ public class CarJsonParser {
         float height = 1.0f;
         String type = "cars";
         List<HitboxDefinition> hitboxes = new ArrayList<>();
+        List<HitFaceDefinition> hitFaces = new ArrayList<>();
         List<String> allowedPartGroups = new ArrayList<>();
         List<CarJsonResult.PartPlacement> partPlacements = new ArrayList<>();
 
         if (jsonFile == null || !jsonFile.exists()) {
             displayNames.put("default", fallbackName);
             return new CarJsonResult(displayNames, width, height, type,
-                    hitboxes, allowedPartGroups, partPlacements);
+                    hitboxes, allowedPartGroups, partPlacements, hitFaces);
         }
 
         try (InputStreamReader reader = new InputStreamReader(
@@ -120,6 +122,7 @@ public class CarJsonParser {
                 }
             }
 
+            // ========== OBB hitbox（従来） ==========
             if (root.has("hitbox") && root.get("hitbox").isJsonObject()) {
                 JsonObject hitboxObj = root.getAsJsonObject("hitbox");
 
@@ -178,6 +181,80 @@ public class CarJsonParser {
                 }
             }
 
+            // ========== 多角形平面 hitfaces（OBBとは別経路） ==========
+            if (root.has("hitfaces") && root.get("hitfaces").isJsonObject()) {
+                JsonObject facesRoot = root.getAsJsonObject("hitfaces");
+                if (facesRoot.has("facesList") && facesRoot.get("facesList").isJsonArray()) {
+                    JsonArray facesList = facesRoot.getAsJsonArray("facesList");
+                    for (int fi = 0; fi < facesList.size(); fi++) {
+                        if (!facesList.get(fi).isJsonObject()) continue;
+                        JsonObject faceObj = facesList.get(fi).getAsJsonObject();
+
+                        Vec3 positionOffset = Vec3.ZERO;
+                        if (faceObj.has("po") && faceObj.get("po").isJsonArray()) {
+                            JsonArray po = faceObj.getAsJsonArray("po");
+                            if (po.size() >= 3) {
+                                positionOffset = new Vec3(
+                                        po.get(0).getAsDouble(),
+                                        po.get(1).getAsDouble(),
+                                        po.get(2).getAsDouble());
+                            }
+                        }
+
+                        float faceYaw = 0f, facePitch = 0f, faceRoll = 0f;
+                        if (faceObj.has("ro") && faceObj.get("ro").isJsonArray()) {
+                            JsonArray ro = faceObj.getAsJsonArray("ro");
+                            if (ro.size() >= 3) {
+                                faceYaw = ro.get(0).getAsFloat();
+                                facePitch = ro.get(1).getAsFloat();
+                                faceRoll = ro.get(2).getAsFloat();
+                            }
+                        }
+
+                        if (!faceObj.has("faceVertices") || !faceObj.get("faceVertices").isJsonArray()) {
+                            LOGGER.warn("[CarJsonParser] facesList[{}] に faceVertices がありません: {}",
+                                    fi, jsonFile.getName());
+                            continue;
+                        }
+
+                        JsonArray vertArray = faceObj.getAsJsonArray("faceVertices");
+                        if (vertArray.size() < 3) {
+                            LOGGER.warn("[CarJsonParser] facesList[{}] の faceVertices は3点以上必要です: {}",
+                                    fi, jsonFile.getName());
+                            continue;
+                        }
+
+                        Vec3[] verts = new Vec3[vertArray.size()];
+                        boolean ok = true;
+                        for (int i = 0; i < vertArray.size(); i++) {
+                            if (!vertArray.get(i).isJsonArray()) {
+                                ok = false;
+                                break;
+                            }
+                            JsonArray p = vertArray.get(i).getAsJsonArray();
+                            if (p.size() < 3) {
+                                ok = false;
+                                break;
+                            }
+                            verts[i] = new Vec3(
+                                    p.get(0).getAsDouble(),
+                                    p.get(1).getAsDouble(),
+                                    p.get(2).getAsDouble());
+                        }
+                        if (!ok) {
+                            LOGGER.warn("[CarJsonParser] facesList[{}] の頂点が不正です: {}",
+                                    fi, jsonFile.getName());
+                            continue;
+                        }
+
+                        hitFaces.add(new HitFaceDefinition(
+                                verts, positionOffset, faceYaw, facePitch, faceRoll));
+                        LOGGER.info("[HitFace] {} face[{}] verts={}",
+                                jsonFile.getName(), fi, verts.length);
+                    }
+                }
+            }
+
         } catch (Exception e) {
             LOGGER.warn("[CarJsonParser] 読み取り失敗: {} ({})",
                     jsonFile.getName(), e.toString());
@@ -187,7 +264,7 @@ public class CarJsonParser {
         }
 
         return new CarJsonResult(displayNames, width, height, type,
-                hitboxes, allowedPartGroups, partPlacements);
+                hitboxes, allowedPartGroups, partPlacements, hitFaces);
     }
 
     /**

@@ -69,8 +69,8 @@ public class CarEntity extends Entity {
         }
     }
 
-    private AABB computeAabbFromAllObbs() {
-        List<Vec3[]> all = getAllWorldHitboxVertices();
+    private AABB computeAabbFromAllHitFaces() {
+        List<Vec3[]> all = getAllWorldHitFaceVertices();
         if (all.isEmpty()) {
             double x = this.getX();
             double y = this.getY();
@@ -86,7 +86,9 @@ public class CarEntity extends Entity {
         double maxZ = Double.NEGATIVE_INFINITY;
 
         for (Vec3[] verts : all) {
+            if (verts == null) continue;
             for (Vec3 v : verts) {
+                if (v == null) continue;
                 minX = Math.min(minX, v.x);
                 minY = Math.min(minY, v.y);
                 minZ = Math.min(minZ, v.z);
@@ -95,32 +97,33 @@ public class CarEntity extends Entity {
                 maxZ = Math.max(maxZ, v.z);
             }
         }
+
+        if (minX == Double.POSITIVE_INFINITY) {
+            double x = this.getX();
+            double y = this.getY();
+            double z = this.getZ();
+            return new AABB(x, y, z, x, y, z);
+        }
         return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
-    /** 姿勢が変わったあとに呼ぶ。本体 AABB を OBB 囲いに合わせる。 */
-    public void refreshObbBoundingBox() {
-        this.setBoundingBox(computeAabbFromAllObbs());
+    /**
+     * 姿勢更新後に呼ぶ。本体AABBを hitfaces の囲いに合わせる。
+     * （旧名 refreshObbBoundingBox の置き換え。呼び出し側もこの名前に揃える）
+     */
+    public void refreshHitFaceBoundingBox() {
+        this.setBoundingBox(computeAabbFromAllHitFaces());
     }
 
-    /**
-     * バニラが位置から箱を作るときの入口。
-     * 寸法(width/height)ではなく、常に OBB 囲いを返す。
-     *
-     * ※ mappings によっては makeBoundingBox(Vec3) の方だけがある。
-     *    その場合は下の「Vec3版」を使う。
-     */
+    /** 互換：旧名から新実装へ回す（呼び出しが残っていても動く） */
+    public void refreshObbBoundingBox() {
+        refreshHitFaceBoundingBox();
+    }
+
     @Override
     protected AABB makeBoundingBox() {
-        return computeAabbFromAllObbs();
+        return computeAabbFromAllHitFaces();
     }
-
-    // Vec3 版がある環境用（どちらか一方でコンパイルが通る方を残す）
-    // @Override
-    // protected AABB makeBoundingBox(Vec3 pos) {
-    //     // pos 基準で OBB を再計算したい場合は getAllWorldHitboxVertices を pos 対応にする
-    //     return computeAabbFromAllObbs();
-    // }
 
     @Override
     public void tick() {
@@ -393,6 +396,29 @@ public class CarEntity extends Entity {
 
     public List<HitboxDefinition> getHitboxDefinitions() {
         return CarPackLoader.getHitboxDefinitions(getBaseName());
+    }
+
+    public List<HitFaceDefinition> getHitFaceDefinitions() {
+        return CarPackLoader.getHitFaceDefinitions(getBaseName());
+    }
+
+    /**
+     * すべての hitface を、ワールド座標の頂点配列（複数枚）として返します。
+     * 定義が無ければ空リストです。
+     */
+    public List<Vec3[]> getAllWorldHitFaceVertices() {
+        return getAllWorldHitFaceVertices(this.getYRot());
+    }
+
+    public List<Vec3[]> getAllWorldHitFaceVertices(float yawDegrees) {
+        List<HitFaceDefinition> defs = getHitFaceDefinitions();
+        List<Vec3[]> result = new java.util.ArrayList<>(defs.size());
+        for (HitFaceDefinition def : defs) {
+            result.add(def.toWorldVertices(
+                    getX(), getY(), getZ(),
+                    yawDegrees, getCarPitch(), getCarRoll()));
+        }
+        return result;
     }
 
     /**

@@ -41,6 +41,8 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
 
         renderHitboxLines(entity, entityYaw, poseStack, bufferSource);
 
+        renderHitFaceLines(entity, entityYaw, poseStack, bufferSource);
+
         if (!entity.resolveRenderCache()) return;
         var parts = entity.getCachedParts();
         if (parts.isEmpty()) {
@@ -235,6 +237,44 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
                         .endVertex();
                 lineConsumer.vertex(pose.pose(), relX[b], relY[b], relZ[b])
                         .color(0, 0, 255, 255)
+                        .normal(pose.normal(), 0, 1, 0)
+                        .endVertex();
+            }
+        }
+    }
+
+    private void renderHitFaceLines(CarEntity entity, float entityYaw,
+                                    PoseStack poseStack, MultiBufferSource bufferSource) {
+
+        if (!Minecraft.getInstance().getEntityRenderDispatcher().shouldRenderHitBoxes()) return;
+
+        var allFaces = entity.getAllWorldHitFaceVertices(entityYaw);
+        if (allFaces.isEmpty()) return;
+
+        VertexConsumer lineConsumer = bufferSource.getBuffer(RenderType.lines());
+        PoseStack.Pose pose = poseStack.last();
+
+        for (Vec3[] worldVertices : allFaces) {
+            int n = worldVertices.length;
+            if (n < 2) continue;
+
+            float[] relX = new float[n], relY = new float[n], relZ = new float[n];
+            for (int i = 0; i < n; i++) {
+                relX[i] = (float) (worldVertices[i].x - entity.getX());
+                relY[i] = (float) (worldVertices[i].y - entity.getY());
+                relZ[i] = (float) (worldVertices[i].z - entity.getZ());
+            }
+
+            // 輪郭: 0→1→…→n-1→0
+            for (int i = 0; i < n; i++) {
+                int a = i;
+                int b = (i + 1) % n;
+                lineConsumer.vertex(pose.pose(), relX[a], relY[a], relZ[a])
+                        .color(0, 255, 0, 255)
+                        .normal(pose.normal(), 0, 1, 0)
+                        .endVertex();
+                lineConsumer.vertex(pose.pose(), relX[b], relY[b], relZ[b])
+                        .color(0, 255, 0, 255)
                         .normal(pose.normal(), 0, 1, 0)
                         .endVertex();
             }

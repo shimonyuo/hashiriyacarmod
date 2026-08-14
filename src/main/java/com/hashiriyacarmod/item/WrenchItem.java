@@ -1,11 +1,10 @@
 package com.hashiriyacarmod.item;
 
-import com.hashiriyacarmod.CarCollisionUtil;
 import com.hashiriyacarmod.CarEntity;
+import com.hashiriyacarmod.HitFaceMath;
 import com.hashiriyacarmod.client.WrenchGuiScreen;
 import com.hashiriyacarmod.network.CarWrenchDataPacket;   // ← 追加
 import com.hashiriyacarmod.network.ModNetworking;
-import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -19,8 +18,7 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
+
 import java.util.List;
 
 /**
@@ -60,40 +58,40 @@ public class WrenchItem extends Item {
         Vec3 lineEnd = eyePos.add(lookDir.scale(reach));
 
         AABB searchArea = new AABB(eyePos, lineEnd).inflate(reach);
-        List<Entity> nearbyEntities = player.level().getEntities(player, searchArea, e -> e instanceof CarEntity);
+        List<Entity> nearbyEntities = player.level().getEntities(
+                player, searchArea, e -> e instanceof CarEntity);
 
+        // 視線上、最初に当たった hitface（最小 t）の車
         CarEntity closestCar = null;
-        double closestDistanceSq = Double.MAX_VALUE;
+        double bestT = Double.POSITIVE_INFINITY;
 
         for (Entity entity : nearbyEntities) {
             CarEntity car = (CarEntity) entity;
-            var defs = car.getHitboxDefinitions();
-            if (defs.isEmpty()) continue;
-
-            boolean hit = false;
-            for (Vec3[] worldVertices : car.getAllWorldHitboxVertices()) {
-                if (CarCollisionUtil.lineIntersectsBox(eyePos, lineEnd, worldVertices)) {
-                    hit = true;
-                    break;
-                }
+            List<Vec3[]> faces = car.getAllWorldHitFaceVertices();
+            if (faces == null || faces.isEmpty()) {
+                continue;
             }
-            if (!hit) continue;
-
-            // 視線始点からの距離を計算
-            double distSq = eyePos.distanceToSqr(car.position());
-            if (distSq < closestDistanceSq) {
-                closestDistanceSq = distSq;
-                closestCar = car;
+            for (Vec3[] face : faces) {
+                Double t = HitFaceMath.lineHitPolygonT(eyePos, lineEnd, face);
+                if (t == null) {
+                    continue;
+                }
+                if (t < bestT) {
+                    bestT = t;
+                    closestCar = car;
+                }
             }
         }
 
-        if (closestCar == null) return;
+        if (closestCar == null) {
+            return;
+        }
 
-        // 一番近い車のデータを送信
         CompoundTag savedNbt = closestCar.getSaveData();
         List<String> groups = closestCar.getAllowedPartGroups();
 
-        CarWrenchDataPacket packet = new CarWrenchDataPacket(closestCar.getUUID(), savedNbt, groups);
+        CarWrenchDataPacket packet = new CarWrenchDataPacket(
+                closestCar.getUUID(), savedNbt, groups);
         ModNetworking.sendToClient(player, packet);
     }
 }
