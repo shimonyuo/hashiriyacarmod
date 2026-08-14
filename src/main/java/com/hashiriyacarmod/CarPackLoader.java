@@ -36,12 +36,6 @@ public class CarPackLoader {
         return hitboxMap.getOrDefault(baseName, List.of());
     }
 
-    private static final Map<String, List<HitFaceDefinition>> hitFaceMap = new LinkedHashMap<>();
-
-    public static List<HitFaceDefinition> getHitFaceDefinitions(String baseName) {
-        return hitFaceMap.getOrDefault(baseName, List.of());
-    }
-
     private static final Logger LOGGER = LogManager.getLogger(HashiriyaCarMod.MOD_ID);
 
     private static final DeferredRegister<Item> ITEMS =
@@ -216,9 +210,6 @@ public class CarPackLoader {
         if (!result.hitboxes.isEmpty()) {
             hitboxMap.put(baseName, result.hitboxes);
         }
-
-        hitFaceMap.put(baseName,
-                result.hitFaces != null ? result.hitFaces : List.of());
 
         if (!result.allowedPartGroups.isEmpty()) {
             LOGGER.debug("[HashiriyaCarMod] {} の allowedPartGroups: {}", baseName, result.allowedPartGroups);

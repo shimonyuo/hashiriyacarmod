@@ -1,6 +1,5 @@
 package com.hashiriyacarmod.cars;
 
-import com.hashiriyacarmod.HitFaceDefinition;
 import com.hashiriyacarmod.HitboxDefinition;
 import net.minecraft.world.phys.Vec3;
 
@@ -12,33 +11,29 @@ import java.util.Map;
 
 public class CarJsonResult {
 
+    /** 互換用。default（または唯一の名前） */
     public final String displayName;
+
+    /** 言語コード → 表示名。"default" を含む */
     public final Map<String, String> displayNames;
+
     public final float width;
     public final float height;
     public final String type;
     public final List<HitboxDefinition> hitboxes;
-    public final List<HitFaceDefinition> hitFaces;
     public final List<String> allowedPartGroups;
     public final List<PartPlacement> partPlacements;
 
-    /** 旧呼び出し互換（hitFaces 空） */
     public CarJsonResult(String displayName, float width, float height, String type,
                          List<HitboxDefinition> hitboxes, List<String> allowedPartGroups,
                          List<PartPlacement> partPlacements) {
         this(Map.of("default", displayName != null ? displayName : ""),
-                width, height, type, hitboxes, allowedPartGroups, partPlacements, List.of());
+                width, height, type, hitboxes, allowedPartGroups, partPlacements);
     }
 
     public CarJsonResult(Map<String, String> displayNames, float width, float height, String type,
                          List<HitboxDefinition> hitboxes, List<String> allowedPartGroups,
                          List<PartPlacement> partPlacements) {
-        this(displayNames, width, height, type, hitboxes, allowedPartGroups, partPlacements, List.of());
-    }
-
-    public CarJsonResult(Map<String, String> displayNames, float width, float height, String type,
-                         List<HitboxDefinition> hitboxes, List<String> allowedPartGroups,
-                         List<PartPlacement> partPlacements, List<HitFaceDefinition> hitFaces) {
         Map<String, String> copy = new LinkedHashMap<>();
         if (displayNames != null) {
             for (Map.Entry<String, String> e : displayNames.entrySet()) {
@@ -56,11 +51,13 @@ public class CarJsonResult {
         this.height = height;
         this.type = type;
         this.hitboxes = hitboxes != null ? hitboxes : new ArrayList<>();
-        this.hitFaces = hitFaces != null ? hitFaces : new ArrayList<>();
         this.allowedPartGroups = allowedPartGroups != null ? allowedPartGroups : new ArrayList<>();
         this.partPlacements = partPlacements != null ? partPlacements : new ArrayList<>();
     }
 
+    /**
+     * ゲームの言語コード（例: ja_jp）に合う名前。無ければ default。
+     */
     public String resolveDisplayName(String languageCode) {
         if (languageCode != null) {
             String key = languageCode.toLowerCase(Locale.ROOT);
@@ -82,6 +79,7 @@ public class CarJsonResult {
         public final float rotY;
         public final float rotZ;
         public final List<String> groups;
+        /** 空なら初期装備なし。PartRegistry の baseName */
         public final String defaultPart;
 
         public PartPlacement(Vec3 position, float rotX, float rotY, float rotZ, List<String> groups) {

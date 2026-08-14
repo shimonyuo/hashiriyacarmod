@@ -69,20 +69,24 @@ public class CarEntity extends Entity {
         }
     }
 
-    private AABB computeAabbFromAllCollisionGeometry() {
+    private AABB computeAabbFromAllObbs() {
+        List<Vec3[]> all = getAllWorldHitboxVertices();
+        if (all.isEmpty()) {
+            double x = this.getX();
+            double y = this.getY();
+            double z = this.getZ();
+            return new AABB(x, y, z, x, y, z);
+        }
+
         double minX = Double.POSITIVE_INFINITY;
         double minY = Double.POSITIVE_INFINITY;
         double minZ = Double.POSITIVE_INFINITY;
         double maxX = Double.NEGATIVE_INFINITY;
         double maxY = Double.NEGATIVE_INFINITY;
         double maxZ = Double.NEGATIVE_INFINITY;
-        boolean any = false;
 
-        for (WorldHitFace face : getAllWorldHitFaces()) {
-            if (face == null || face.vertices == null) continue;
-            for (Vec3 v : face.vertices) {
-                if (v == null) continue;
-                any = true;
+        for (Vec3[] verts : all) {
+            for (Vec3 v : verts) {
                 minX = Math.min(minX, v.x);
                 minY = Math.min(minY, v.y);
                 minZ = Math.min(minZ, v.z);
@@ -91,41 +95,32 @@ public class CarEntity extends Entity {
                 maxZ = Math.max(maxZ, v.z);
             }
         }
-
-        if (!any) {
-            for (Vec3[] verts : getAllWorldHitboxVertices()) {
-                if (verts == null) continue;
-                for (Vec3 v : verts) {
-                    if (v == null) continue;
-                    any = true;
-                    minX = Math.min(minX, v.x);
-                    minY = Math.min(minY, v.y);
-                    minZ = Math.min(minZ, v.z);
-                    maxX = Math.max(maxX, v.x);
-                    maxY = Math.max(maxY, v.y);
-                    maxZ = Math.max(maxZ, v.z);
-                }
-            }
-        }
-
-        if (!any) {
-            double x = this.getX();
-            double y = this.getY();
-            double z = this.getZ();
-            return new AABB(x, y, z, x, y, z);
-        }
         return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
-    /** 姿勢変更後に本体 AABB を衝突形状の囲いに合わせる */
+    /** 姿勢が変わったあとに呼ぶ。本体 AABB を OBB 囲いに合わせる。 */
     public void refreshObbBoundingBox() {
-        this.setBoundingBox(computeAabbFromAllCollisionGeometry());
+        this.setBoundingBox(computeAabbFromAllObbs());
     }
 
+    /**
+     * バニラが位置から箱を作るときの入口。
+     * 寸法(width/height)ではなく、常に OBB 囲いを返す。
+     *
+     * ※ mappings によっては makeBoundingBox(Vec3) の方だけがある。
+     *    その場合は下の「Vec3版」を使う。
+     */
     @Override
     protected AABB makeBoundingBox() {
-        return computeAabbFromAllCollisionGeometry();
+        return computeAabbFromAllObbs();
     }
+
+    // Vec3 版がある環境用（どちらか一方でコンパイルが通る方を残す）
+    // @Override
+    // protected AABB makeBoundingBox(Vec3 pos) {
+    //     // pos 基準で OBB を再計算したい場合は getAllWorldHitboxVertices を pos 対応にする
+    //     return computeAabbFromAllObbs();
+    // }
 
     @Override
     public void tick() {
@@ -659,65 +654,5 @@ public class CarEntity extends Entity {
             if (p != null) return new float[]{p.rotX, p.rotY, p.rotZ};
         }
         return new float[]{0, 0, 0};
-    }
-
-    public List<WorldHitbox> getAllWorldHitboxes() {
-        return getAllWorldHitboxes(this.getYRot());
-    }
-
-    public List<WorldHitbox> getAllWorldHitboxes(float yawDegrees) {
-        List<HitboxDefinition> defs = getHitboxDefinitions();
-        List<WorldHitbox> result = new java.util.ArrayList<>(defs.size());
-        for (HitboxDefinition def : defs) {
-            result.add(new WorldHitbox(
-                    def.toWorldVertices(
-                            getX(), getY(), getZ(),
-                            yawDegrees, getCarPitch(), getCarRoll()),
-                    def.getSkipFaces()
-            ));
-        }
-        return result;
-    }
-
-    /** 1つの OBB（ワールド頂点とスキップ面） */
-    public static final class WorldHitbox {
-        public final Vec3[] vertices;
-        /** length 6。true = その面を無視 */
-        public final boolean[] skipFaces;
-
-        public WorldHitbox(Vec3[] vertices, boolean[] skipFaces) {
-            this.vertices = vertices;
-            this.skipFaces = skipFaces != null ? skipFaces : new boolean[6];
-        }
-    }
-
-    public static final class WorldHitFace {
-        public final Vec3[] vertices; // ワールド、時計回り
-        public final Vec3 normal;     // 外向き
-
-        public WorldHitFace(Vec3[] vertices, Vec3 normal) {
-            this.vertices = vertices;
-            this.normal = normal != null ? normal : Vec3.ZERO;
-        }
-    }
-
-    public List<HitFaceDefinition> getHitFaceDefinitions() {
-        return CarPackLoader.getHitFaceDefinitions(getBaseName());
-    }
-
-    public List<WorldHitFace> getAllWorldHitFaces() {
-        return getAllWorldHitFaces(this.getYRot());
-    }
-
-    public List<WorldHitFace> getAllWorldHitFaces(float yawDegrees) {
-        List<HitFaceDefinition> defs = getHitFaceDefinitions();
-        List<WorldHitFace> out = new java.util.ArrayList<>(defs.size());
-        for (HitFaceDefinition def : defs) {
-            Vec3[] w = def.toWorldVertices(
-                    getX(), getY(), getZ(),
-                    yawDegrees, getCarPitch(), getCarRoll());
-            out.add(new WorldHitFace(w, HitFaceDefinition.outwardNormal(w)));
-        }
-        return out;
     }
 }

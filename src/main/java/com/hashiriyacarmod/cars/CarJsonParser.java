@@ -5,7 +5,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.hashiriyacarmod.HashiriyaCarMod;
-import com.hashiriyacarmod.HitFaceDefinition;
 import com.hashiriyacarmod.HitboxDefinition;
 import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
@@ -34,14 +33,13 @@ public class CarJsonParser {
         float height = 1.0f;
         String type = "cars";
         List<HitboxDefinition> hitboxes = new ArrayList<>();
-        List<HitFaceDefinition> hitFaces = new ArrayList<>();
         List<String> allowedPartGroups = new ArrayList<>();
         List<CarJsonResult.PartPlacement> partPlacements = new ArrayList<>();
 
         if (jsonFile == null || !jsonFile.exists()) {
             displayNames.put("default", fallbackName);
             return new CarJsonResult(displayNames, width, height, type,
-                    hitboxes, allowedPartGroups, partPlacements, hitFaces);
+                    hitboxes, allowedPartGroups, partPlacements);
         }
 
         try (InputStreamReader reader = new InputStreamReader(
@@ -165,23 +163,8 @@ public class CarJsonParser {
                                             p.get(1).getAsDouble(),
                                             p.get(2).getAsDouble());
                                 }
-
-                                boolean[] skipFace = new boolean[6];
-                                if (obb.has("skip_faces") && obb.get("skip_faces").isJsonArray()) {
-                                    JsonArray skipArr = obb.getAsJsonArray("skip_faces");
-                                    for (int s = 0; s < skipArr.size(); s++) {
-                                        if (!skipArr.get(s).isJsonPrimitive()) continue;
-                                        int idx = skipArr.get(s).getAsInt();
-                                        if (idx >= 0 && idx < 6) {
-                                            skipFace[idx] = true;
-                                        }
-                                    }
-                                }
-
                                 defs.add(new HitboxDefinition(
-                                        verts, positionOffset,
-                                        obbYaw, obbPitch, obbRoll,
-                                        skipFace));
+                                        verts, positionOffset, obbYaw, obbPitch, obbRoll));
                             } else {
                                 LOGGER.warn("[HashiriyaCarMod] obbList[{}]のverticesは8個必要です: {}",
                                         obbIndex, jsonFile.getName());
@@ -195,65 +178,6 @@ public class CarJsonParser {
                 }
             }
 
-            // hitfaces（任意頂点数の平面ポリゴン）
-            if (root.has("hitfaces") && root.get("hitfaces").isJsonObject()) {
-                JsonObject hfRoot = root.getAsJsonObject("hitfaces");
-                if (hfRoot.has("facesList") && hfRoot.get("facesList").isJsonArray()) {
-                    JsonArray list = hfRoot.getAsJsonArray("facesList");
-                    for (int i = 0; i < list.size(); i++) {
-                        if (!list.get(i).isJsonObject()) continue;
-                        JsonObject faceObj = list.get(i).getAsJsonObject();
-
-                        Vec3 po = Vec3.ZERO;
-                        if (faceObj.has("po") && faceObj.get("po").isJsonArray()) {
-                            JsonArray a = faceObj.getAsJsonArray("po");
-                            if (a.size() >= 3) {
-                                po = new Vec3(
-                                        a.get(0).getAsDouble(),
-                                        a.get(1).getAsDouble(),
-                                        a.get(2).getAsDouble());
-                            }
-                        }
-
-                        float yaw = 0f, pitch = 0f, roll = 0f;
-                        if (faceObj.has("ro") && faceObj.get("ro").isJsonArray()) {
-                            JsonArray a = faceObj.getAsJsonArray("ro");
-                            if (a.size() >= 3) {
-                                yaw = a.get(0).getAsFloat();
-                                pitch = a.get(1).getAsFloat();
-                                roll = a.get(2).getAsFloat();
-                            }
-                        }
-
-                        if (!faceObj.has("faceVertices") || !faceObj.get("faceVertices").isJsonArray()) {
-                            continue;
-                        }
-                        JsonArray va = faceObj.getAsJsonArray("faceVertices");
-                        if (va.size() < 3) {
-                            LOGGER.warn("[CarJsonParser] faceVertices は3点以上: {}", jsonFile.getName());
-                            continue;
-                        }
-
-                        Vec3[] verts = new Vec3[va.size()];
-                        boolean ok = true;
-                        for (int v = 0; v < va.size(); v++) {
-                            if (!va.get(v).isJsonArray() || va.get(v).getAsJsonArray().size() < 3) {
-                                ok = false;
-                                break;
-                            }
-                            JsonArray p = va.get(v).getAsJsonArray();
-                            verts[v] = new Vec3(
-                                    p.get(0).getAsDouble(),
-                                    p.get(1).getAsDouble(),
-                                    p.get(2).getAsDouble());
-                        }
-                        if (!ok) continue;
-
-                        hitFaces.add(new HitFaceDefinition(verts, po, yaw, pitch, roll));
-                    }
-                }
-            }
-
         } catch (Exception e) {
             LOGGER.warn("[CarJsonParser] 読み取り失敗: {} ({})",
                     jsonFile.getName(), e.toString());
@@ -263,9 +187,13 @@ public class CarJsonParser {
         }
 
         return new CarJsonResult(displayNames, width, height, type,
-                hitboxes, allowedPartGroups, partPlacements, hitFaces);
+                hitboxes, allowedPartGroups, partPlacements);
     }
 
+    /**
+     * name が文字列 → default のみ
+     * name がオブジェクト → default / ja_jp / en_us など
+     */
     private static void parseDisplayNames(JsonElement nameEl, Map<String, String> out) {
         if (nameEl == null || nameEl.isJsonNull()) {
             return;
