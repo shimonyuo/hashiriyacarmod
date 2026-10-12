@@ -1,10 +1,12 @@
 package com.hashiriyacarmod.item;
 
+import com.hashiriyacarmod.CarCollisionUtil;
 import com.hashiriyacarmod.CarEntity;
-import com.hashiriyacarmod.HitFaceMath;
+import com.hashiriyacarmod.HitFaceRayUtil;
 import com.hashiriyacarmod.client.WrenchGuiScreen;
 import com.hashiriyacarmod.network.CarWrenchDataPacket;   // ← 追加
 import com.hashiriyacarmod.network.ModNetworking;
+import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,7 +20,8 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import java.util.List;
 
 /**
@@ -72,7 +75,7 @@ public class WrenchItem extends Item {
                 continue;
             }
             for (Vec3[] face : faces) {
-                Double t = HitFaceMath.lineHitPolygonT(eyePos, lineEnd, face);
+                Double t = HitFaceRayUtil.lineHitPolygonT(eyePos, lineEnd, face);
                 if (t == null) {
                     continue;
                 }
