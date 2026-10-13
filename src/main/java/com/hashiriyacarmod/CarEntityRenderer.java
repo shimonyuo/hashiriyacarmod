@@ -72,7 +72,10 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
 
             poseStack.pushPose();
             Matrix4f partMatrix = new Matrix4f(poseStack.last().pose());
-            drawMeshOnGpu(entity, partName, mesh, partMatrix, texLoc, packedLight);
+
+            ResourceLocation meshTex = resolveCarMeshTexture(entity, partName, texLoc);
+            drawMeshOnGpu(entity, partName, mesh, partMatrix, meshTex, packedLight);
+
             poseStack.popPose();
         }
         renderAttachedRecursive(
@@ -172,6 +175,26 @@ public class CarEntityRenderer extends EntityRenderer<CarEntity> {
             return new ResourceLocation(path);
         }
         // 先頭の / を除去
+        if (path.startsWith("/")) {
+            path = path.substring(1);
+        }
+        return new ResourceLocation(HashiriyaCarMod.MOD_ID, path);
+    }
+
+    private static ResourceLocation resolveCarMeshTexture(CarEntity entity, String meshName, ResourceLocation fallback) {
+        AssetRegistry registry = CarPackLoader.getAssetRegistry(entity.getBaseName());
+        if (registry == null || registry.meshTexturePath == null || registry.meshTexturePath.isEmpty()) {
+            return fallback;
+        }
+
+        String path = registry.meshTexturePath.get(meshName);
+        if (path == null || path.isBlank()) {
+            return fallback;
+        }
+
+        if (path.contains(":")) {
+            return new ResourceLocation(path);
+        }
         if (path.startsWith("/")) {
             path = path.substring(1);
         }

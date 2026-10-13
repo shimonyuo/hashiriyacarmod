@@ -37,11 +37,13 @@ public class CarJsonParser {
         List<HitFaceDefinition> hitFaces = new ArrayList<>();
         List<String> allowedPartGroups = new ArrayList<>();
         List<CarJsonResult.PartPlacement> partPlacements = new ArrayList<>();
+        Map<String, String> meshTexturePath = new LinkedHashMap<>();
 
         if (jsonFile == null || !jsonFile.exists()) {
             displayNames.put("default", fallbackName);
+            // meshTexturePath が無い状態なので空マップを渡す
             return new CarJsonResult(displayNames, width, height, type,
-                    hitboxes, allowedPartGroups, partPlacements, hitFaces);
+                    hitboxes, allowedPartGroups, partPlacements, hitFaces, Map.of());
         }
 
         try (InputStreamReader reader = new InputStreamReader(
@@ -70,6 +72,21 @@ public class CarJsonParser {
                     || displayNames.get("default") == null
                     || displayNames.get("default").isEmpty()) {
                 displayNames.put("default", fallbackName);
+            }
+
+            if (root.has("mesh_texture_path") && root.get("mesh_texture_path").isJsonArray()) {
+                JsonArray mtArray = root.getAsJsonArray("mesh_texture_path");
+                for (int i = 0; i < mtArray.size(); i++) {
+                    JsonElement el = mtArray.get(i);
+                    if (!el.isJsonObject()) continue;
+                    JsonObject mobj = el.getAsJsonObject();
+                    if (!mobj.has("mesh") || !mobj.has("path")) continue;
+                    if (!mobj.get("mesh").isJsonPrimitive() || !mobj.get("path").isJsonPrimitive()) continue;
+                    String meshName = mobj.get("mesh").getAsString().trim();
+                    String path = mobj.get("path").getAsString().trim();
+                    if (meshName.isEmpty() || path.isEmpty()) continue;
+                    meshTexturePath.put(meshName, path);
+                }
             }
 
             if (root.has("parts") && root.get("parts").isJsonArray()) {
@@ -264,7 +281,7 @@ public class CarJsonParser {
         }
 
         return new CarJsonResult(displayNames, width, height, type,
-                hitboxes, allowedPartGroups, partPlacements, hitFaces);
+                hitboxes, allowedPartGroups, partPlacements, hitFaces, meshTexturePath);
     }
 
     /**

@@ -28,11 +28,13 @@ public class CarJsonResult {
     /** OBB とは別経路の多角形平面 */
     public final List<HitFaceDefinition> hitFaces;
 
+    public final Map<String, String> meshTexturePath;
+
     public CarJsonResult(String displayName, float width, float height, String type,
                          List<HitboxDefinition> hitboxes, List<String> allowedPartGroups,
                          List<PartPlacement> partPlacements) {
         this(Map.of("default", displayName != null ? displayName : ""),
-                width, height, type, hitboxes, allowedPartGroups, partPlacements, List.of());
+                width, height, type, hitboxes, allowedPartGroups, partPlacements, List.of(), Map.of());
     }
 
     public CarJsonResult(String displayName, float width, float height, String type,
@@ -40,19 +42,20 @@ public class CarJsonResult {
                          List<PartPlacement> partPlacements,
                          List<HitFaceDefinition> hitFaces) {
         this(Map.of("default", displayName != null ? displayName : ""),
-                width, height, type, hitboxes, allowedPartGroups, partPlacements, hitFaces);
+                width, height, type, hitboxes, allowedPartGroups, partPlacements, hitFaces, Map.of());
     }
 
     public CarJsonResult(Map<String, String> displayNames, float width, float height, String type,
                          List<HitboxDefinition> hitboxes, List<String> allowedPartGroups,
                          List<PartPlacement> partPlacements) {
-        this(displayNames, width, height, type, hitboxes, allowedPartGroups, partPlacements, List.of());
+        this(displayNames, width, height, type, hitboxes, allowedPartGroups, partPlacements, List.of(), Map.of());
     }
 
     public CarJsonResult(Map<String, String> displayNames, float width, float height, String type,
                          List<HitboxDefinition> hitboxes, List<String> allowedPartGroups,
                          List<PartPlacement> partPlacements,
-                         List<HitFaceDefinition> hitFaces) {
+                         List<HitFaceDefinition> hitFaces,
+                         Map<String, String> meshTexturePath) {
         Map<String, String> copy = new LinkedHashMap<>();
         if (displayNames != null) {
             for (Map.Entry<String, String> e : displayNames.entrySet()) {
@@ -73,6 +76,7 @@ public class CarJsonResult {
         this.allowedPartGroups = allowedPartGroups != null ? allowedPartGroups : new ArrayList<>();
         this.partPlacements = partPlacements != null ? partPlacements : new ArrayList<>();
         this.hitFaces = hitFaces != null ? hitFaces : new ArrayList<>();
+        this.meshTexturePath = meshTexturePath != null ? Map.copyOf(meshTexturePath) : Map.of();
     }
 
     /**

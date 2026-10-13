@@ -236,7 +236,8 @@ public class CarPackLoader {
                 pngFile,
                 meshParts,
                 result.allowedPartGroups,
-                result.partPlacements
+                result.partPlacements,
+                result.meshTexturePath
         );
         assetRegistryMap.put(baseName, entry);
 

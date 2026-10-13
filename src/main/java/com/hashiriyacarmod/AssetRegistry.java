@@ -19,10 +19,22 @@ public class AssetRegistry {
     /** 車JSON parts[] の po / ro / group */
     public final List<CarJsonResult.PartPlacement> partPlacements;
 
+    /** meshName -> テクスチャパス。車本体のメッシュごとに個別テクスチャを持てる */
+    public final Map<String, String> meshTexturePath;
+
+    // 既存の呼び出しを壊さないための互換用
     public AssetRegistry(String baseName, File objFile, File pngFile,
                          Map<String, ObjMesh> parts,
                          List<String> allowedPartGroups,
                          List<CarJsonResult.PartPlacement> partPlacements) {
+        this(baseName, objFile, pngFile, parts, allowedPartGroups, partPlacements, Map.of());
+    }
+
+    public AssetRegistry(String baseName, File objFile, File pngFile,
+                         Map<String, ObjMesh> parts,
+                         List<String> allowedPartGroups,
+                         List<CarJsonResult.PartPlacement> partPlacements,
+                         Map<String, String> meshTexturePath) {
         this.baseName = baseName;
         this.objFile = objFile;
         this.pngFile = pngFile;
@@ -33,5 +45,6 @@ public class AssetRegistry {
         this.partPlacements = partPlacements != null
                 ? new ArrayList<>(partPlacements)
                 : new ArrayList<>();
+        this.meshTexturePath = meshTexturePath != null ? Map.copyOf(meshTexturePath) : Map.of();
     }
 }
